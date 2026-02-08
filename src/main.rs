@@ -163,8 +163,13 @@ async fn handle_mail_command(
             }
         }
         MailCommands::Read { agent_id, mail_id } => {
-            let mail = service.mark_mail_as_read_by_short_id(agent_id, &mail_id).await?;
-            println!("✓ Marked as read: {}", mail.subject);
+            let mail = service.mark_mail_as_read_by_short_id(agent_id.clone(), &mail_id).await?;
+            let sender = service.get_agent_by_mailbox(mail.from_mailbox_id).await?;
+            println!("📧 Mail from {}: {}", sender.name, mail.subject);
+            println!("   ID: {}", mail.id);
+            println!("   Date: {}", mail.created_at.format("%Y-%m-%d %H:%M:%S"));
+            println!();
+            println!("{}", mail.body);
         }
         MailCommands::ShouldLook { agent_id } => {
             let (has_unread, mails) = service.check_unread_mail(agent_id.clone()).await?;
