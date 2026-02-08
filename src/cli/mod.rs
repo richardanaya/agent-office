@@ -51,30 +51,27 @@ pub enum MailCommands {
     },
     /// View inbox of an agent
     Inbox {
-        #[arg(short, long)]
+        /// Agent ID to view inbox for
         agent_id: String,
     },
     /// View outbox (sent items) of an agent
     Outbox {
-        #[arg(short, long)]
+        /// Agent ID to view outbox for
         agent_id: String,
     },
     /// Mark mail as read by short ID (first 8 chars of UUID)
     Read {
-        /// Agent who owns the mail
-        #[arg(short, long)]
-        agent_id: String,
         /// Short mail ID (first 8 characters of UUID)
         mail_id: String,
     },
     /// Check if agent should look at their mail (has unread messages)
     ShouldLook {
-        #[arg(short, long)]
+        /// Agent ID to check
         agent_id: String,
     },
     /// Watch for new mail and execute command when unread mail arrives
     Watch {
-        #[arg(short, long)]
+        /// Agent ID to watch
         agent_id: String,
         /// Interval in seconds between checks
         #[arg(short, long, default_value = "60")]
