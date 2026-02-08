@@ -314,158 +314,142 @@ async fn handle_kb_command(
     cmd: KbCommands,
 ) -> anyhow::Result<()> {
     match cmd {
-        KbCommands::Init { agent_id, name } => {
-            let kb = service.create_knowledge_base(agent_id, name).await?;
-            println!("Created knowledge base: {}", kb.name);
-            println!("Agent ID: {}", kb.agent_id);
-        }
-        KbCommands::Note { agent_id, title, content } => {
-            let note = service.create_note(agent_id, title, content).await?;
-            if let Some(ref lid) = note.luhmann_id {
-                println!("Created note: [{}] {} (ID: {})", lid, note.title, note.id);
+        KbCommands::Create { id, title, content } => {
+            let note = if let Some(luhmann_id) = id {
+                let parsed_id = LuhmannId::parse(&luhmann_id)
+                    .ok_or_else(|| anyhow::anyhow!("Invalid Luhmann ID: {}", luhmann_id))?;
+                service.create_note_with_id(parsed_id, title, content).await?
             } else {
-                println!("Created note: {} (ID: {})", note.title, note.id);
-            }
+                service.create_note(title, content).await?
+            };
+            println!("Created note [{}] {}", note.id, note.title);
         }
-        KbCommands::NoteWithId { agent_id, luhmann_id, title, content } => {
-            let lid = LuhmannId::parse(&luhmann_id)
-                .ok_or_else(|| anyhow::anyhow!("Invalid Luhmann ID: {}", luhmann_id))?;
-            let note = service.create_note_with_luhmann_id(agent_id, lid, title, content).await?;
-            println!("Created note: [{}] {} (ID: {})", 
-                note.luhmann_id.as_ref().unwrap(), note.title, note.id);
+        KbCommands::Branch { parent_luhmann_id, title, content } => {
+            let parent_id = LuhmannId::parse(&parent_luhmann_id)
+                .ok_or_else(|| anyhow::anyhow!("Invalid parent Luhmann ID: {}", parent_luhmann_id))?;
+            let note = service.create_branch(&parent_id, title, content).await?;
+            println!("Created branch [{}] {} (parent: {})", 
+                note.id, note.title, parent_luhmann_id);
         }
-        KbCommands::Branch { agent_id, parent_note_id, title, content } => {
-            let note = service.create_note_branch(agent_id, parent_note_id, title, content).await?;
-            println!("Created branch: [{}] {} (ID: {})", 
-                note.luhmann_id.as_ref().unwrap(), note.title, note.id);
-            println!("Parent: {}", parent_note_id);
-        }
-        KbCommands::List { agent_id } => {
-            let notes = service.list_agent_notes(agent_id.clone()).await?;
+        KbCommands::List => {
+            let notes = service.list_notes().await?;
             if notes.is_empty() {
-                println!("No notes found for agent {}", agent_id);
+                println!("No notes found");
             } else {
-                println!("Notes for agent {}:", agent_id);
+                println!("Notes:");
                 for note in notes {
-                    let addr = note.luhmann_id.as_ref()
-                        .map(|l| l.to_string())
-                        .unwrap_or_else(|| note.id.to_string());
-                    println!("  [{}] {} - {}", addr, note.title, note.id);
+                    println!("  [{}] {}", note.id, note.title);
                 }
             }
         }
-        KbCommands::Get { note_id } => {
-            let note = service.get_note(note_id).await?;
-            let addr = note.luhmann_id.as_ref()
-                .map(|l| format!("[{}]", l.to_string()))
-                .unwrap_or_default();
-            println!("Note {} {}", addr, note.id);
+        KbCommands::Get { luhmann_id } => {
+            let id = LuhmannId::parse(&luhmann_id)
+                .ok_or_else(|| anyhow::anyhow!("Invalid Luhmann ID: {}", luhmann_id))?;
+            let note = service.get_note(&id).await?;
+            println!("Note [{}]", note.id);
             println!("Title: {}", note.title);
             println!("Content: {}", note.content);
-            println!("Tags: {:?}", note.tags);
-            println!("Created: {}", note.created_at);
-        }
-        KbCommands::GetByLuhmann { agent_id, luhmann_id } => {
-            let lid = LuhmannId::parse(&luhmann_id)
-                .ok_or_else(|| anyhow::anyhow!("Invalid Luhmann ID: {}", luhmann_id))?;
-            match service.get_note_by_luhmann_id(agent_id, &lid).await? {
-                Some(note) => {
-                    println!("Note [{}] {}", luhmann_id, note.id);
-                    println!("Title: {}", note.title);
-                    println!("Content: {}", note.content);
-                }
-                None => {
-                    println!("No note found with Luhmann ID {}", luhmann_id);
-                }
+            if !note.tags.is_empty() {
+                println!("Tags: {}", note.tags.join(", "));
             }
+            println!("Created: {}", note.created_at.format("%Y-%m-%d %H:%M:%S"));
         }
-        KbCommands::Link { from, to, context, .. } => {
-            service.link_notes(from, to, 
-                services::kb::domain::LinkType::References, 
-                context).await?;
-            println!("Linked {} → {}", from, to);
+        KbCommands::Link { from_luhmann_id, to_luhmann_id, context } => {
+            let from_id = LuhmannId::parse(&from_luhmann_id)
+                .ok_or_else(|| anyhow::anyhow!("Invalid source Luhmann ID: {}", from_luhmann_id))?;
+            let to_id = LuhmannId::parse(&to_luhmann_id)
+                .ok_or_else(|| anyhow::anyhow!("Invalid target Luhmann ID: {}", to_luhmann_id))?;
+            service.link_notes(&from_id, &to_id, context).await?;
+            println!("Linked [{}] → [{}]", from_luhmann_id, to_luhmann_id);
         }
-        KbCommands::Backlinks { note_id } => {
-            let notes = service.get_backlinks(note_id).await?;
-            if notes.is_empty() {
-                println!("No backlinks found for {}", note_id);
-            } else {
-                println!("Notes linking to {}:", note_id);
-                for note in notes {
-                    let addr = note.luhmann_id.as_ref()
-                        .map(|l| l.to_string())
-                        .unwrap_or_default();
-                    println!("  [{}] {} - {}", addr, note.title, note.id);
-                }
-            }
-        }
-        KbCommands::Related { note_id, depth } => {
-            let notes = service.get_related_notes(note_id, depth).await?;
-            if notes.is_empty() {
-                println!("No related notes found within {} hops", depth);
-            } else {
-                println!("Notes within {} hops of {}:", depth, note_id);
-                for note in notes {
-                    let addr = note.luhmann_id.as_ref()
-                        .map(|l| l.to_string())
-                        .unwrap_or_default();
-                    println!("  [{}] {}", addr, note.title);
-                }
-            }
-        }
-        KbCommands::Tree { agent_id, prefix } => {
-            let lid = LuhmannId::parse(&prefix)
-                .ok_or_else(|| anyhow::anyhow!("Invalid Luhmann ID prefix: {}", prefix))?;
-            let notes = service.list_notes_by_luhmann_prefix(agent_id, &lid).await?;
-            if notes.is_empty() {
-                println!("No notes found under prefix {}", prefix);
-            } else {
-                println!("Notes under {}:", prefix);
-                for note in notes {
-                    let addr = note.luhmann_id.as_ref()
-                        .map(|l| l.to_string())
-                        .unwrap_or_default();
-                    let indent = "  ".repeat(lid.level());
-                    println!("{}{}[{}] {}", indent, addr, note.title, note.id);
-                }
-            }
-        }
-        KbCommands::Search { agent_id, query } => {
-            let notes = service.search_notes(agent_id, &query).await?;
+        KbCommands::Search { query } => {
+            let notes = service.search_notes(&query).await?;
             if notes.is_empty() {
                 println!("No notes matching '{}'", query);
             } else {
                 println!("Notes matching '{}':", query);
                 for note in notes {
-                    let addr = note.luhmann_id.as_ref()
-                        .map(|l| l.to_string())
-                        .unwrap_or_default();
-                    println!("  [{}] {}", addr, note.title);
+                    println!("  [{}] {}", note.id, note.title);
                 }
             }
         }
-        KbCommands::Tag { note_id, tag } => {
-            let note = service.add_tag(note_id, tag).await?;
-            println!("Added tag to note {}: {:?}", note.id, note.tags);
-        }
-        KbCommands::Tags { agent_id } => {
-            let tags = service.get_all_tags(agent_id).await?;
-            if tags.is_empty() {
-                println!("No tags found");
+        KbCommands::Tree { prefix } => {
+            let prefix_id = LuhmannId::parse(&prefix)
+                .ok_or_else(|| anyhow::anyhow!("Invalid Luhmann ID prefix: {}", prefix))?;
+            let notes = service.list_notes_by_prefix(&prefix_id).await?;
+            if notes.is_empty() {
+                println!("No notes found under prefix {}", prefix);
             } else {
-                println!("Tags: {}", tags.join(", "));
+                println!("Notes under {}:", prefix);
+                for note in notes {
+                    let indent = "  ".repeat(note.id.level());
+                    println!("{}{}[{}] {}", indent, indent, note.id, note.title);
+                }
             }
         }
-        KbCommands::Graph { note_id, depth } => {
-            let graph = service.get_note_graph(note_id, depth).await?;
-            println!("Graph around {} (depth {}):", note_id, depth);
-            println!("Notes: {}", graph.notes.len());
-            println!("Links: {}", graph.links.len());
-            for note in &graph.notes {
-                let addr = note.luhmann_id.as_ref()
-                    .map(|l| format!("[{}]", l))
-                    .unwrap_or_default();
-                println!("  {} {} - {}", addr, note.id, note.title);
+        KbCommands::Cont { from_luhmann_id, to_luhmann_id } => {
+            let from_id = LuhmannId::parse(&from_luhmann_id)
+                .ok_or_else(|| anyhow::anyhow!("Invalid source Luhmann ID: {}", from_luhmann_id))?;
+            let to_id = LuhmannId::parse(&to_luhmann_id)
+                .ok_or_else(|| anyhow::anyhow!("Invalid target Luhmann ID: {}", to_luhmann_id))?;
+            service.mark_continuation(&from_id, &to_id).await?;
+            println!("Marked [{}] continues on [{}]", from_luhmann_id, to_luhmann_id);
+        }
+        KbCommands::Index { luhmann_id } => {
+            let id = LuhmannId::parse(&luhmann_id)
+                .ok_or_else(|| anyhow::anyhow!("Invalid Luhmann ID: {}", luhmann_id))?;
+            let index = service.create_index(&id).await?;
+            println!("Created index [{}] {}", index.id, index.title);
+        }
+        KbCommands::Context { luhmann_id } => {
+            let id = LuhmannId::parse(&luhmann_id)
+                .ok_or_else(|| anyhow::anyhow!("Invalid Luhmann ID: {}", luhmann_id))?;
+            let ctx = service.get_context(&id).await?;
+            
+            println!("╔══════════════════════════════════════════════════════════════╗");
+            println!("║  Note: [{}] {}", ctx.note.id, ctx.note.title);
+            println!("╚══════════════════════════════════════════════════════════════╝");
+            println!();
+            println!("{}", ctx.note.content);
+            println!();
+            
+            if let Some(parent) = ctx.parent {
+                println!("📁 Parent: [{}] {}", parent.id, parent.title);
+            }
+            
+            if !ctx.children.is_empty() {
+                println!("\n📂 Children ({}):", ctx.children.len());
+                for child in ctx.children {
+                    println!("   └─ [{}] {}", child.id, child.title);
+                }
+            }
+            
+            if !ctx.links_to.is_empty() {
+                println!("\n🔗 Links to ({}):", ctx.links_to.len());
+                for target in ctx.links_to {
+                    println!("   → [{}] {}", target.id, target.title);
+                }
+            }
+            
+            if !ctx.backlinks.is_empty() {
+                println!("\n🔗 Backlinks ({}):", ctx.backlinks.len());
+                for source in ctx.backlinks {
+                    println!("   ← [{}] {}", source.id, source.title);
+                }
+            }
+            
+            if !ctx.continues_to.is_empty() {
+                println!("\n➡️  Continues on ({}):", ctx.continues_to.len());
+                for cont in ctx.continues_to {
+                    println!("   → [{}] {}", cont.id, cont.title);
+                }
+            }
+            
+            if !ctx.continued_from.is_empty() {
+                println!("\n⬅️  Continued from ({}):", ctx.continued_from.len());
+                for cont in ctx.continued_from {
+                    println!("   ← [{}] {}", cont.id, cont.title);
+                }
             }
         }
     }

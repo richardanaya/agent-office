@@ -1,10 +1,9 @@
-use crate::domain::{Node, NodeId, Properties, PropertyValue, Timestamp};
+use crate::domain::{Node, Properties, PropertyValue, Timestamp};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
-pub type NoteId = NodeId;
-pub type TagId = NodeId;
-pub type AgentId = String;
+/// NoteId is now a LuhmannId - no more UUIDs
+pub type NoteId = LuhmannId;
 
 /// Luhmann-style hierarchical ID for Zettelkasten notes
 /// Format alternates numbers and letters: 1, 1a, 1a1, 1a1a, 1a2, 1b, 2, etc.
@@ -186,36 +185,41 @@ impl LinkType {
 }
 
 /// A Zettelkasten-style atomic note
+/// The LuhmannId IS the note ID - no UUIDs
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Note {
-    pub id: NoteId,
-    pub luhmann_id: Option<LuhmannId>, // Optional hierarchical address
+    pub id: NoteId, // This is now a LuhmannId
     pub title: String,
     pub content: String,
-    pub created_by: AgentId,
     pub tags: Vec<String>,
+    pub agent_id: Option<String>, // For jots - associates note with an agent
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
 
 impl Note {
-    pub fn new(created_by: AgentId, title: impl Into<String>, content: impl Into<String>) -> Self {
+    pub fn new(id: LuhmannId, title: impl Into<String>, content: impl Into<String>) -> Self {
         let now = Utc::now();
         Self {
-            id: NoteId::new_v4(),
-            luhmann_id: None,
+            id,
             title: title.into(),
             content: content.into(),
-            created_by,
             tags: Vec::new(),
+            agent_id: None,
             created_at: now,
             updated_at: now,
         }
     }
 
-    pub fn with_luhmann_id(mut self, luhmann_id: LuhmannId) -> Self {
-        self.luhmann_id = Some(luhmann_id);
-        self
+    pub fn new_with_agent(
+        id: LuhmannId,
+        title: impl Into<String>,
+        content: impl Into<String>,
+        agent_id: impl Into<String>,
+    ) -> Self {
+        let mut note = Self::new(id, title, content);
+        note.agent_id = Some(agent_id.into());
+        note
     }
 
     pub fn to_node(&self) -> Node {
@@ -228,16 +232,11 @@ impl Note {
             "content".to_string(),
             PropertyValue::String(self.content.clone()),
         );
+        // Store the Luhmann ID as a property as well for easy lookup
         props.insert(
-            "created_by".to_string(),
-            PropertyValue::String(self.created_by.to_string()),
+            "luhmann_id".to_string(),
+            PropertyValue::String(self.id.to_string()),
         );
-        if let Some(ref lid) = self.luhmann_id {
-            props.insert(
-                "luhmann_id".to_string(),
-                PropertyValue::String(lid.to_string()),
-            );
-        }
         props.insert(
             "tags".to_string(),
             PropertyValue::List(
@@ -247,9 +246,17 @@ impl Note {
                     .collect(),
             ),
         );
+        if let Some(ref agent_id) = self.agent_id {
+            props.insert(
+                "agent_id".to_string(),
+                PropertyValue::String(agent_id.clone()),
+            );
+        }
 
+        // Convert LuhmannId to a deterministic Node ID string
+        let node_id = crate::domain::string_to_node_id(&self.id.to_string());
         let mut node = Node::new("note", props);
-        node.id = self.id;
+        node.id = node_id;
         node.created_at = self.created_at;
         node.updated_at = self.updated_at;
         node
@@ -263,15 +270,11 @@ impl Note {
         let title = node.get_property("title")?.as_str()?.to_string();
         let content = node.get_property("content")?.as_str()?.to_string();
 
-        let created_by = node
-            .get_property("created_by")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())?;
-
+        // Parse LuhmannId from the luhmann_id property
         let luhmann_id = node
             .get_property("luhmann_id")
             .and_then(|v| v.as_str())
-            .and_then(|s| LuhmannId::parse(s));
+            .and_then(|s| LuhmannId::parse(s))?;
 
         let tags = node
             .get_property("tags")
@@ -285,13 +288,17 @@ impl Note {
             })
             .unwrap_or_default();
 
+        let agent_id = node
+            .get_property("agent_id")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
         Some(Self {
-            id: node.id,
-            luhmann_id,
+            id: luhmann_id,
             title,
             content,
-            created_by,
             tags,
+            agent_id,
             created_at: node.created_at,
             updated_at: node.updated_at,
         })
@@ -312,6 +319,7 @@ impl Note {
 }
 
 /// A note link (relationship between two notes)
+/// Uses LuhmannIds directly
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NoteLink {
     pub from_note_id: NoteId,
@@ -336,58 +344,41 @@ impl NoteLink {
     }
 }
 
-/// Represents a knowledge base namespace for an agent
+/// Simple counter for generating next main topic IDs
+/// Stored as a special node in the graph
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KnowledgeBase {
-    pub agent_id: AgentId,
-    pub name: String,
-    pub description: Option<String>,
+pub struct NoteCounter {
+    pub next_main_id: u32,
     pub created_at: Timestamp,
-    pub next_main_id: u32, // For auto-generating Luhmann IDs (1, 2, 3...)
 }
 
-impl KnowledgeBase {
-    pub fn new(agent_id: AgentId, name: impl Into<String>) -> Self {
+impl NoteCounter {
+    pub fn new() -> Self {
         Self {
-            agent_id,
-            name: name.into(),
-            description: None,
-            created_at: Utc::now(),
             next_main_id: 1,
+            created_at: Utc::now(),
         }
     }
 
     pub fn to_node(&self) -> Node {
         let mut props = Properties::new();
-        props.insert("name".to_string(), PropertyValue::String(self.name.clone()));
-        if let Some(desc) = &self.description {
-            props.insert(
-                "description".to_string(),
-                PropertyValue::String(desc.clone()),
-            );
-        }
         props.insert(
             "next_main_id".to_string(),
             PropertyValue::Integer(self.next_main_id as i64),
         );
 
-        let mut node = Node::new("knowledge_base", props);
-        // Convert string agent_id to deterministic UUID
-        node.id = crate::domain::string_to_node_id(&self.agent_id);
+        let mut node = Node::new("note_counter", props);
+        // Use a fixed node ID for the counter
+        node.id = crate::domain::string_to_node_id("__kb_counter__");
         node.created_at = self.created_at;
         node
     }
 
     pub fn from_node(node: &Node) -> Option<Self> {
-        if node.node_type != "knowledge_base" {
+        if node.node_type != "note_counter" {
             return None;
         }
 
-        let name = node.get_property("name")?.as_str()?.to_string();
-        let description = node
-            .get_property("description")
-            .and_then(|v| v.as_str())
-            .map(String::from);
         let next_main_id = node
             .get_property("next_main_id")
             .and_then(|v| match v {
@@ -396,23 +387,13 @@ impl KnowledgeBase {
             })
             .unwrap_or(1);
 
-        // Get agent_id from properties, fallback to converting node.id
-        let agent_id = node
-            .get_property("agent_id")
-            .and_then(|v| v.as_str())
-            .map(String::from)
-            .unwrap_or_else(|| node.id.to_string());
-
         Some(Self {
-            agent_id,
-            name,
-            description,
-            created_at: node.created_at,
             next_main_id,
+            created_at: node.created_at,
         })
     }
 
-    /// Generate the next main topic ID (1, 2, 3...)
+    /// Get and increment the next main topic ID
     pub fn next_main_topic_id(&mut self) -> LuhmannId {
         let id = LuhmannId {
             parts: vec![LuhmannPart::Number(self.next_main_id)],

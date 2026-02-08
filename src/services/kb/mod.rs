@@ -1,9 +1,8 @@
-use crate::domain::{Edge, Properties, PropertyValue, string_to_node_id};
-use crate::services::kb::domain::{KnowledgeBase, LinkType, LuhmannId, Note, NoteId, NoteLink, AgentId};
-use crate::storage::{GraphStorage, StorageError, EdgeDirection};
+use crate::domain::{Edge, Properties, PropertyValue, string_to_node_id, NodeId};
+use crate::services::kb::domain::{LinkType, LuhmannId, Note, NoteId, NoteLink, NoteCounter};
+use crate::storage::{GraphStorage, StorageError, SearchQuery, EdgeDirection};
 use async_trait::async_trait;
 use thiserror::Error;
-use std::collections::{HashMap, HashSet, VecDeque};
 
 pub mod domain;
 
@@ -12,20 +11,14 @@ pub enum KbError {
     #[error("Note not found: {0}")]
     NoteNotFound(NoteId),
     
-    #[error("Knowledge base not found for agent: {0}")]
-    KnowledgeBaseNotFound(AgentId),
+    #[error("Note already exists: {0}")]
+    NoteAlreadyExists(NoteId),
     
-    #[error("Agent not found: {0}")]
-    AgentNotFound(AgentId),
-    
-    #[error("Invalid link type: {0}")]
-    InvalidLinkType(String),
+    #[error("Invalid Luhmann ID: {0}")]
+    InvalidLuhmannId(String),
     
     #[error("Storage error: {0}")]
     Storage(#[from] StorageError),
-    
-    #[error("Note already linked")]
-    AlreadyLinked,
     
     #[error("Cannot link note to itself")]
     SelfLink,
@@ -33,71 +26,69 @@ pub enum KbError {
 
 pub type Result<T> = std::result::Result<T, KbError>;
 
+/// Simplified Knowledge Base Service - shared across all agents, uses only Luhmann IDs
 #[async_trait]
 pub trait KnowledgeBaseService: Send + Sync {
-    // Knowledge Base operations
-    async fn create_knowledge_base(&self, agent_id: AgentId, name: impl Into<String> + Send) -> Result<KnowledgeBase>;
-    async fn get_knowledge_base(&self, agent_id: AgentId) -> Result<KnowledgeBase>;
-    
-    // Note operations
+    // Core note operations (all use LuhmannId)
     async fn create_note(
         &self,
-        agent_id: AgentId,
         title: impl Into<String> + Send,
         content: impl Into<String> + Send,
     ) -> Result<Note>;
     
-    async fn get_note(&self, note_id: NoteId) -> Result<Note>;
-    async fn update_note(&self, note: &Note) -> Result<Note>;
-    async fn delete_note(&self, note_id: NoteId) -> Result<()>;
-    async fn list_agent_notes(&self, agent_id: AgentId) -> Result<Vec<Note>>;
-    async fn search_notes(&self, agent_id: AgentId, query: &str) -> Result<Vec<Note>>;
+    async fn create_note_with_id(
+        &self,
+        id: LuhmannId,
+        title: impl Into<String> + Send,
+        content: impl Into<String> + Send,
+    ) -> Result<Note>;
     
-    // Tag operations
-    async fn add_tag(&self, note_id: NoteId, tag: impl Into<String> + Send) -> Result<Note>;
-    async fn remove_tag(&self, note_id: NoteId, tag: &str) -> Result<Note>;
-    async fn list_notes_by_tag(&self, agent_id: AgentId, tag: &str) -> Result<Vec<Note>>;
-    async fn get_all_tags(&self, agent_id: AgentId) -> Result<Vec<String>>;
+    async fn create_branch(
+        &self,
+        parent_id: &LuhmannId,
+        title: impl Into<String> + Send,
+        content: impl Into<String> + Send,
+    ) -> Result<Note>;
+    
+    async fn get_note(&self, note_id: &LuhmannId) -> Result<Note>;
+    async fn update_note(&self, note: &Note) -> Result<Note>;
+    async fn delete_note(&self, note_id: &LuhmannId) -> Result<()>;
+    async fn list_notes(&self) -> Result<Vec<Note>>;
+    async fn list_notes_by_prefix(&self, prefix: &LuhmannId) -> Result<Vec<Note>>;
+    
+    // Search
+    async fn search_notes(&self, query: &str) -> Result<Vec<Note>>;
     
     // Link operations
     async fn link_notes(
         &self,
-        from_note_id: NoteId,
-        to_note_id: NoteId,
-        link_type: LinkType,
+        from_id: &LuhmannId,
+        to_id: &LuhmannId,
         context: Option<String>,
     ) -> Result<()>;
     
-    async fn unlink_notes(&self, from_note_id: NoteId, to_note_id: NoteId, link_type: LinkType) -> Result<()>;
-    async fn get_links_from(&self, note_id: NoteId, link_type: Option<LinkType>) -> Result<Vec<NoteLink>>;
-    async fn get_links_to(&self, note_id: NoteId, link_type: Option<LinkType>) -> Result<Vec<NoteLink>>;
-    async fn get_backlinks(&self, note_id: NoteId) -> Result<Vec<Note>>;
+    async fn get_links(&self, note_id: &LuhmannId) -> Result<Vec<NoteLink>>;
     
-    // Graph traversal
-    async fn get_related_notes(&self, note_id: NoteId, depth: usize) -> Result<Vec<Note>>;
-    async fn find_path(&self, start_note_id: NoteId, end_note_id: NoteId, max_depth: usize) -> Result<Option<Vec<NoteId>>>;
-    async fn get_note_graph(&self, note_id: NoteId, depth: usize) -> Result<NoteGraph>;
+    // Note relationships
+    async fn mark_continuation(&self, from_id: &LuhmannId, to_id: &LuhmannId) -> Result<()>;
     
-    // Luhmann ID operations (Zettelkasten addressing)
-    async fn create_note_with_luhmann_id(
-        &self,
-        agent_id: AgentId,
-        luhmann_id: LuhmannId,
-        title: impl Into<String> + Send,
-        content: impl Into<String> + Send,
-    ) -> Result<Note>;
+    // Index operations
+    async fn create_index(&self, parent_id: &LuhmannId) -> Result<Note>;
     
-    async fn create_note_branch(
-        &self,
-        agent_id: AgentId,
-        parent_note_id: NoteId,
-        title: impl Into<String> + Send,
-        content: impl Into<String> + Send,
-    ) -> Result<Note>;
-    
-    async fn get_note_by_luhmann_id(&self, agent_id: AgentId, luhmann_id: &LuhmannId) -> Result<Option<Note>>;
-    async fn get_next_available_id(&self, agent_id: AgentId, parent_id: Option<&LuhmannId>) -> Result<LuhmannId>;
-    async fn list_notes_by_luhmann_prefix(&self, agent_id: AgentId, prefix: &LuhmannId) -> Result<Vec<Note>>;
+    // Get full context of a note
+    async fn get_context(&self, note_id: &LuhmannId) -> Result<NoteContext>;
+}
+
+/// Full context of a note including all relationships
+#[derive(Debug, Clone)]
+pub struct NoteContext {
+    pub note: Note,
+    pub parent: Option<Note>,
+    pub children: Vec<Note>,
+    pub links_to: Vec<Note>,
+    pub backlinks: Vec<Note>,
+    pub continues_to: Vec<Note>,
+    pub continued_from: Vec<Note>,
 }
 
 /// Represents a subgraph of related notes
@@ -106,6 +97,11 @@ pub struct NoteGraph {
     pub center_note_id: NoteId,
     pub notes: Vec<Note>,
     pub links: Vec<NoteLink>,
+}
+
+/// Convert a LuhmannId to a NodeId for storage
+fn luhmann_to_node_id(luhmann_id: &LuhmannId) -> NodeId {
+    string_to_node_id(&luhmann_id.to_string())
 }
 
 pub struct KnowledgeBaseServiceImpl<S: GraphStorage> {
@@ -117,181 +113,227 @@ impl<S: GraphStorage> KnowledgeBaseServiceImpl<S> {
         Self { storage }
     }
 
-    async fn note_exists(&self, note_id: NoteId) -> Result<bool> {
-        match self.storage.get_node(note_id).await {
-            Ok(node) => Ok(Note::from_node(&node).is_some()),
-            Err(StorageError::NodeNotFound(_)) => Ok(false),
+    /// Convert LuhmannId to storage NodeId
+    fn to_node_id(&self, luhmann_id: &LuhmannId) -> NodeId {
+        luhmann_to_node_id(luhmann_id)
+    }
+
+    /// Get or initialize the note counter
+    async fn get_or_init_counter(&self) -> Result<NoteCounter> {
+        let counter_id = string_to_node_id("__kb_counter__");
+        match self.storage.get_node(counter_id).await {
+            Ok(node) => {
+                NoteCounter::from_node(&node)
+                    .ok_or_else(|| KbError::Storage(StorageError::ConstraintViolation("Invalid counter node".to_string())))
+            }
+            Err(StorageError::NodeNotFound(_)) => {
+                // Create new counter
+                let counter = NoteCounter::new();
+                let node = counter.to_node();
+                self.storage.create_node(&node).await?;
+                Ok(counter)
+            }
             Err(e) => Err(KbError::Storage(e)),
+        }
+    }
+
+    /// Update the counter
+    async fn update_counter(&self, counter: &NoteCounter) -> Result<()> {
+        let node = counter.to_node();
+        self.storage.update_node(&node).await?;
+        Ok(())
+    }
+
+    /// Generate next available top-level ID
+    async fn next_main_id(&self) -> Result<LuhmannId> {
+        let mut counter = self.get_or_init_counter().await?;
+        let id = counter.next_main_topic_id();
+        self.update_counter(&counter).await?;
+        Ok(id)
+    }
+
+    /// Find the next available child ID under a parent
+    async fn next_child_id(&self, parent_id: &LuhmannId) -> Result<LuhmannId> {
+        let all_notes = self.list_notes().await?;
+        
+        // Collect existing children
+        let mut children: Vec<LuhmannId> = all_notes
+            .into_iter()
+            .map(|n| n.id)
+            .filter(|id| id.parent().as_ref() == Some(parent_id))
+            .collect();
+        
+        if children.is_empty() {
+            // First child
+            Ok(parent_id.first_child())
+        } else {
+            // Find the next sibling after the last child
+            children.sort();
+            let last = children.last().unwrap();
+            Ok(last.next_sibling()
+                .unwrap_or_else(|| last.first_child()))
         }
     }
 }
 
 #[async_trait]
 impl<S: GraphStorage> KnowledgeBaseService for KnowledgeBaseServiceImpl<S> {
-    async fn create_knowledge_base(&self, agent_id: AgentId, name: impl Into<String> + Send) -> Result<KnowledgeBase> {
-        // Clone agent_id for error handling
-        let agent_id_for_err = agent_id.clone();
-        // Get agent and verify it exists
-        let node_id = string_to_node_id(&agent_id);
-        let node = self.storage.get_node(node_id).await
-            .map_err(|e| match e {
-                StorageError::NodeNotFound(_) => KbError::AgentNotFound(agent_id_for_err),
-                _ => KbError::Storage(e),
-            })?;
-        
-        // Agent node becomes the knowledge base - update its properties
-        let mut kb = KnowledgeBase::new(agent_id.clone(), name);
-        kb.agent_id = agent_id.clone(); // Already set but explicit
-        
-        // Update the agent node with kb metadata
-        let mut updated_node = node.clone();
-        updated_node.properties.insert("kb_name".to_string(), PropertyValue::String(kb.name.clone()));
-        updated_node.properties.insert("kb_enabled".to_string(), PropertyValue::Boolean(true));
-        updated_node.properties.insert("next_main_id".to_string(), PropertyValue::Integer(1));
-        
-        self.storage.update_node(&updated_node).await?;
-        Ok(kb)
-    }
-
-    async fn get_knowledge_base(&self, agent_id: AgentId) -> Result<KnowledgeBase> {
-        let agent_id_err = agent_id.clone();
-        let node_id = string_to_node_id(&agent_id);
-        let node = self.storage.get_node(node_id).await
-            .map_err(|e| match e {
-                StorageError::NodeNotFound(_) => KbError::KnowledgeBaseNotFound(agent_id_err),
-                _ => KbError::Storage(e),
-            })?;
-        
-        // Check if kb_enabled is set
-        let kb_enabled = node.get_property("kb_enabled")
-            .and_then(|v| match v {
-                PropertyValue::Boolean(b) => Some(*b),
-                _ => None,
-            })
-            .unwrap_or(false);
-        
-        if !kb_enabled {
-            return Err(KbError::KnowledgeBaseNotFound(agent_id.clone()));
-        }
-        
-        let name = node.get_property("kb_name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Untitled KB")
-            .to_string();
-        
-        let next_main_id = node.get_property("next_main_id")
-            .and_then(|v| match v {
-                PropertyValue::Integer(n) => Some(*n as u32),
-                _ => Some(1),
-            })
-            .unwrap_or(1);
-        
-        // Get agent_id from node properties or use a default
-        let agent_id = node.get_property("agent_id")
-            .and_then(|v| v.as_str())
-            .map(String::from)
-            .unwrap_or_else(|| node.id.to_string());
-        
-        Ok(KnowledgeBase {
-            agent_id,
-            name,
-            description: None,
-            created_at: node.created_at,
-            next_main_id,
-        })
-    }
-
     async fn create_note(
         &self,
-        agent_id: AgentId,
         title: impl Into<String> + Send,
         content: impl Into<String> + Send,
     ) -> Result<Note> {
-        // Clone agent_id for multiple uses
-        let agent_id_for_err = agent_id.clone();
+        // Generate next available top-level Luhmann ID
+        let luhmann_id = self.next_main_id().await?;
         
-        // Verify agent/knowledge base exists
-        let _ = self.storage.get_node(string_to_node_id(&agent_id)).await
-            .map_err(|e| match e {
-                StorageError::NodeNotFound(_) => KbError::AgentNotFound(agent_id_for_err),
-                _ => KbError::Storage(e),
-            })?;
+        // Check if note already exists
+        let node_id = self.to_node_id(&luhmann_id);
+        match self.storage.get_node(node_id).await {
+            Ok(_) => return Err(KbError::NoteAlreadyExists(luhmann_id)),
+            Err(StorageError::NodeNotFound(_)) => (), // Good, doesn't exist
+            Err(e) => return Err(KbError::Storage(e)),
+        }
         
-        // Generate next available Luhmann ID for top-level note
-        let luhmann_id = self.get_next_available_id(agent_id.clone(), None).await?;
-        
-        let note = Note::new(agent_id.clone(), title, content)
-            .with_luhmann_id(luhmann_id);
+        let note = Note::new(luhmann_id, title, content);
         let node = note.to_node();
         self.storage.create_node(&node).await?;
         
-        // Create ownership edge from agent to note
+        Ok(note)
+    }
+
+    async fn create_note_with_id(
+        &self,
+        id: LuhmannId,
+        title: impl Into<String> + Send,
+        content: impl Into<String> + Send,
+    ) -> Result<Note> {
+        // Check if note already exists
+        let node_id = self.to_node_id(&id);
+        match self.storage.get_node(node_id).await {
+            Ok(_) => return Err(KbError::NoteAlreadyExists(id)),
+            Err(StorageError::NodeNotFound(_)) => (), // Good, doesn't exist
+            Err(e) => return Err(KbError::Storage(e)),
+        }
+        
+        let note = Note::new(id, title, content);
+        let node = note.to_node();
+        self.storage.create_node(&node).await?;
+        
+        Ok(note)
+    }
+
+    async fn create_branch(
+        &self,
+        parent_id: &LuhmannId,
+        title: impl Into<String> + Send,
+        content: impl Into<String> + Send,
+    ) -> Result<Note> {
+        // Verify parent exists
+        let parent_node_id = self.to_node_id(parent_id);
+        self.storage.get_node(parent_node_id).await
+            .map_err(|e| match e {
+                StorageError::NodeNotFound(_) => KbError::NoteNotFound(parent_id.clone()),
+                _ => KbError::Storage(e),
+            })?;
+        
+        // Generate child ID
+        let child_id = self.next_child_id(parent_id).await?;
+        
+        // Check if child already exists
+        let child_node_id = self.to_node_id(&child_id);
+        match self.storage.get_node(child_node_id).await {
+            Ok(_) => return Err(KbError::NoteAlreadyExists(child_id)),
+            Err(StorageError::NodeNotFound(_)) => (), // Good, doesn't exist
+            Err(e) => return Err(KbError::Storage(e)),
+        }
+        
+        // Create the note
+        let note = Note::new(child_id.clone(), title, content);
+        let node = note.to_node();
+        self.storage.create_node(&node).await?;
+        
+        // Create link to parent
+        let mut props = Properties::new();
+        props.insert("context".to_string(), PropertyValue::String(format!("Branch of {}", parent_id)));
+        
         let edge = Edge::new(
-            "owns_note",
-            string_to_node_id(&agent_id),
-            note.id,
-            Properties::new(),
+            "references",
+            self.to_node_id(&child_id),
+            parent_node_id,
+            props,
         );
         self.storage.create_edge(&edge).await?;
         
         Ok(note)
     }
 
-    async fn get_note(&self, note_id: NoteId) -> Result<Note> {
-        let node = self.storage.get_node(note_id).await
+    async fn get_note(&self, note_id: &LuhmannId) -> Result<Note> {
+        let node_id = self.to_node_id(note_id);
+        let node = self.storage.get_node(node_id).await
             .map_err(|e| match e {
-                StorageError::NodeNotFound(_) => KbError::NoteNotFound(note_id),
+                StorageError::NodeNotFound(_) => KbError::NoteNotFound(note_id.clone()),
                 _ => KbError::Storage(e),
             })?;
         
         Note::from_node(&node)
-            .ok_or_else(|| KbError::NoteNotFound(note_id))
+            .ok_or_else(|| KbError::NoteNotFound(note_id.clone()))
     }
 
     async fn update_note(&self, note: &Note) -> Result<Note> {
         // Verify note exists
-        self.get_note(note.id).await?;
+        self.get_note(&note.id).await?;
         
         let node = note.to_node();
         self.storage.update_node(&node).await?;
         Ok(note.clone())
     }
 
-    async fn delete_note(&self, note_id: NoteId) -> Result<()> {
+    async fn delete_note(&self, note_id: &LuhmannId) -> Result<()> {
         // Verify note exists
         self.get_note(note_id).await?;
         
+        let node_id = self.to_node_id(note_id);
         // Delete the note (edges will be cascade deleted)
-        self.storage.delete_node(note_id).await?;
+        self.storage.delete_node(node_id).await?;
         Ok(())
     }
 
-    async fn list_agent_notes(&self, agent_id: AgentId) -> Result<Vec<Note>> {
-        // Clone for error handling
-        let agent_id_err = agent_id.clone();
+    async fn list_notes(&self) -> Result<Vec<Note>> {
+        // Query all nodes of type "note"
+        let query = SearchQuery {
+            node_types: vec!["note".to_string()],
+            limit: 10000, // Large limit to get all notes
+            ..SearchQuery::default()
+        };
         
-        // Verify agent exists
-        let agent_node_id = string_to_node_id(&agent_id);
-        let _ = self.storage.get_node(agent_node_id).await
-            .map_err(|e| match e {
-                StorageError::NodeNotFound(_) => KbError::AgentNotFound(agent_id_err),
-                _ => KbError::Storage(e),
-            })?;
+        let results = self.storage.search_nodes(&query).await?;
         
-        // Get all notes owned by this agent
-        let notes = self.storage
-            .get_neighbors(agent_node_id, Some("owns_note"), EdgeDirection::Outgoing)
-            .await?;
-        
-        let notes: Vec<Note> = notes.iter()
-            .filter_map(Note::from_node)
+        let mut notes: Vec<Note> = results.items
+            .into_iter()
+            .filter_map(|node| Note::from_node(&node))
             .collect();
+        
+        // Sort by LuhmannId for consistent ordering
+        notes.sort_by(|a, b| a.id.cmp(&b.id));
         
         Ok(notes)
     }
 
-    async fn search_notes(&self, agent_id: AgentId, query: &str) -> Result<Vec<Note>> {
-        let all_notes = self.list_agent_notes(agent_id).await?;
+    async fn list_notes_by_prefix(&self, prefix: &LuhmannId) -> Result<Vec<Note>> {
+        let all_notes = self.list_notes().await?;
+        
+        let filtered: Vec<Note> = all_notes
+            .into_iter()
+            .filter(|note| {
+                note.id == *prefix || note.id.is_descendant_of(prefix)
+            })
+            .collect();
+        
+        Ok(filtered)
+    }
+
+    async fn search_notes(&self, query: &str) -> Result<Vec<Note>> {
+        let all_notes = self.list_notes().await?;
         let query_lower = query.to_lowercase();
         
         let filtered: Vec<Note> = all_notes.into_iter()
@@ -305,66 +347,30 @@ impl<S: GraphStorage> KnowledgeBaseService for KnowledgeBaseServiceImpl<S> {
         Ok(filtered)
     }
 
-    async fn add_tag(&self, note_id: NoteId, tag: impl Into<String> + Send) -> Result<Note> {
-        let mut note = self.get_note(note_id).await?;
-        note.add_tag(tag);
-        self.update_note(&note).await?;
-        Ok(note)
-    }
-
-    async fn remove_tag(&self, note_id: NoteId, tag: &str) -> Result<Note> {
-        let mut note = self.get_note(note_id).await?;
-        note.remove_tag(tag);
-        self.update_note(&note).await?;
-        Ok(note)
-    }
-
-    async fn list_notes_by_tag(&self, agent_id: AgentId, tag: &str) -> Result<Vec<Note>> {
-        let all_notes = self.list_agent_notes(agent_id).await?;
-        let filtered: Vec<Note> = all_notes.into_iter()
-            .filter(|note| note.tags.contains(&tag.to_string()))
-            .collect();
-        Ok(filtered)
-    }
-
-    async fn get_all_tags(&self, agent_id: AgentId) -> Result<Vec<String>> {
-        let notes = self.list_agent_notes(agent_id).await?;
-        let mut tags = HashSet::new();
-        for note in notes {
-            for tag in note.tags {
-                tags.insert(tag);
-            }
-        }
-        let mut tags: Vec<String> = tags.into_iter().collect();
-        tags.sort();
-        Ok(tags)
-    }
-
     async fn link_notes(
         &self,
-        from_note_id: NoteId,
-        to_note_id: NoteId,
-        link_type: LinkType,
+        from_id: &LuhmannId,
+        to_id: &LuhmannId,
         context: Option<String>,
     ) -> Result<()> {
-        if from_note_id == to_note_id {
+        if from_id == to_id {
             return Err(KbError::SelfLink);
         }
         
         // Verify both notes exist
-        self.get_note(from_note_id).await?;
-        self.get_note(to_note_id).await?;
+        self.get_note(from_id).await?;
+        self.get_note(to_id).await?;
         
-        // Create link edge with context in properties
+        // Create link edge
         let mut props = Properties::new();
         if let Some(ctx) = context {
-            props.insert("context".to_string(), crate::domain::PropertyValue::String(ctx));
+            props.insert("context".to_string(), PropertyValue::String(ctx));
         }
         
         let edge = Edge::new(
-            link_type.as_str(),
-            from_note_id,
-            to_note_id,
+            "references",
+            self.to_node_id(from_id),
+            self.to_node_id(to_id),
             props,
         );
         
@@ -372,327 +378,411 @@ impl<S: GraphStorage> KnowledgeBaseService for KnowledgeBaseServiceImpl<S> {
         Ok(())
     }
 
-    async fn unlink_notes(&self, from_note_id: NoteId, to_note_id: NoteId, link_type: LinkType) -> Result<()> {
-        // Get edges from the source note
-        let edges = self.storage.get_edges_from(from_note_id, Some(link_type.as_str())).await?;
+    async fn get_links(&self, note_id: &LuhmannId) -> Result<Vec<NoteLink>> {
+        let node_id = self.to_node_id(note_id);
         
-        // Find and delete the specific edge
-        for edge in edges {
-            if edge.to_node_id == to_note_id {
-                self.storage.delete_edge(edge.id).await?;
-                return Ok(());
-            }
-        }
+        // Get outgoing edges
+        let edges = self.storage.get_edges_from(node_id, Some("references")).await?;
         
-        Err(KbError::NoteNotFound(to_note_id))
-    }
-
-    async fn get_links_from(&self, note_id: NoteId, link_type: Option<LinkType>) -> Result<Vec<NoteLink>> {
-        let edges = if let Some(lt) = link_type {
-            self.storage.get_edges_from(note_id, Some(lt.as_str())).await?
-        } else {
-            self.storage.get_edges_from(note_id, None).await?
-        };
-        
-        let links: Vec<NoteLink> = edges.iter()
-            .filter_map(|edge| {
-                LinkType::from_str(&edge.edge_type).map(|lt| {
-                    let context = edge.properties.get("context")
-                        .and_then(|v| v.as_str())
-                        .map(String::from);
-                    
-                    NoteLink::new(edge.from_node_id, edge.to_node_id, lt, context)
-                })
-            })
-            .collect();
-        
-        Ok(links)
-    }
-
-    async fn get_links_to(&self, note_id: NoteId, link_type: Option<LinkType>) -> Result<Vec<NoteLink>> {
-        let edges = if let Some(lt) = link_type {
-            self.storage.get_edges_to(note_id, Some(lt.as_str())).await?
-        } else {
-            self.storage.get_edges_to(note_id, None).await?
-        };
-        
-        let links: Vec<NoteLink> = edges.iter()
-            .filter_map(|edge| {
-                LinkType::from_str(&edge.edge_type).map(|lt| {
-                    let context = edge.properties.get("context")
-                        .and_then(|v| v.as_str())
-                        .map(String::from);
-                    
-                    NoteLink::new(edge.from_node_id, edge.to_node_id, lt, context)
-                })
-            })
-            .collect();
-        
-        Ok(links)
-    }
-
-    async fn get_backlinks(&self, note_id: NoteId) -> Result<Vec<Note>> {
-        // Get all edges pointing to this note
-        let edges = self.storage.get_edges_to(note_id, None).await?;
-        
-        let mut notes = Vec::new();
-        for edge in edges {
-            if let Ok(note) = self.get_note(edge.from_node_id).await {
-                notes.push(note);
-            }
-        }
-        
-        Ok(notes)
-    }
-
-    async fn get_related_notes(&self, note_id: NoteId, depth: usize) -> Result<Vec<Note>> {
-        if depth == 0 {
-            return Ok(vec![]);
-        }
-        
-        let mut visited = HashSet::new();
-        let mut result = Vec::new();
-        let mut queue = VecDeque::new();
-        
-        queue.push_back((note_id, 0usize));
-        visited.insert(note_id);
-        
-        while let Some((current_id, current_depth)) = queue.pop_front() {
-            if current_depth >= depth {
-                continue;
-            }
-            
-            // Get all neighbors (both outgoing and incoming edges)
-            let neighbors = self.storage
-                .get_neighbors(current_id, None, EdgeDirection::Both)
-                .await?;
-            
-            for neighbor in neighbors {
-                if visited.insert(neighbor.id) {
-                    if let Some(note) = Note::from_node(&neighbor) {
-                        result.push(note);
-                        queue.push_back((neighbor.id, current_depth + 1));
-                    }
-                }
-            }
-        }
-        
-        Ok(result)
-    }
-
-    async fn find_path(&self, start_note_id: NoteId, end_note_id: NoteId, max_depth: usize) -> Result<Option<Vec<NoteId>>> {
-        if start_note_id == end_note_id {
-            return Ok(Some(vec![start_note_id]));
-        }
-        
-        let mut visited = HashSet::new();
-        let mut queue = VecDeque::new();
-        let mut parent_map: HashMap<NoteId, NoteId> = HashMap::new();
-        
-        queue.push_back((start_note_id, 0usize));
-        visited.insert(start_note_id);
-        
-        while let Some((current_id, depth)) = queue.pop_front() {
-            if depth >= max_depth {
-                continue;
-            }
-            
-            // Get neighbors (outgoing only for path finding)
-            let neighbors = self.storage
-                .get_neighbors(current_id, None, EdgeDirection::Outgoing)
-                .await?;
-            
-            for neighbor in neighbors {
-                if visited.insert(neighbor.id) {
-                    parent_map.insert(neighbor.id, current_id);
-                    
-                    if neighbor.id == end_note_id {
-                        // Reconstruct path
-                        let mut path = vec![end_note_id];
-                        let mut current = end_note_id;
-                        
-                        while let Some(&parent) = parent_map.get(&current) {
-                            path.push(parent);
-                            current = parent;
-                        }
-                        
-                        path.reverse();
-                        return Ok(Some(path));
-                    }
-                    
-                    queue.push_back((neighbor.id, depth + 1));
-                }
-            }
-        }
-        
-        Ok(None)
-    }
-
-    async fn get_note_graph(&self, note_id: NoteId, depth: usize) -> Result<NoteGraph> {
-        let center_note = self.get_note(note_id).await?;
-        let related_notes = self.get_related_notes(note_id, depth).await?;
-        
-        let mut notes = vec![center_note.clone()];
-        notes.extend(related_notes);
-        
-        // Collect all links between notes in the graph
         let mut links = Vec::new();
-        let note_ids: HashSet<NoteId> = notes.iter().map(|n| n.id).collect();
-        
-        for note in &notes {
-            let outgoing = self.get_links_from(note.id, None).await?;
-            for link in outgoing {
-                if note_ids.contains(&link.to_note_id) {
-                    links.push(link);
+        for edge in edges {
+            // Get the target note by looking up the node and converting it
+            match self.storage.get_node(edge.to_node_id).await {
+                Ok(target_node) => {
+                    if let Some(target_id) = target_node.properties.get("luhmann_id")
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| LuhmannId::parse(s))
+                    {
+                        let context = edge.properties.get("context")
+                            .and_then(|v| v.as_str())
+                            .map(String::from);
+                        
+                        links.push(NoteLink::new(
+                            note_id.clone(),
+                            target_id,
+                            LinkType::References,
+                            context,
+                        ));
+                    }
                 }
+                Err(_) => continue, // Skip notes that can't be found
             }
         }
         
-        Ok(NoteGraph {
-            center_note_id: note_id,
-            notes,
-            links,
-        })
+        Ok(links)
     }
 
-    async fn create_note_with_luhmann_id(
-        &self,
-        agent_id: AgentId,
-        luhmann_id: LuhmannId,
-        title: impl Into<String> + Send,
-        content: impl Into<String> + Send,
-    ) -> Result<Note> {
-        // Clone agent_id for multiple uses
-        let agent_id_for_err = agent_id.clone();
+    async fn mark_continuation(&self, from_id: &LuhmannId, to_id: &LuhmannId) -> Result<()> {
+        if from_id == to_id {
+            return Err(KbError::SelfLink);
+        }
         
-        // Verify agent/knowledge base exists
-        let _ = self.storage.get_node(string_to_node_id(&agent_id)).await
-            .map_err(|e| match e {
-                StorageError::NodeNotFound(_) => KbError::AgentNotFound(agent_id_for_err),
-                _ => KbError::Storage(e),
-            })?;
+        // Verify both notes exist
+        self.get_note(from_id).await?;
+        self.get_note(to_id).await?;
         
-        let note = Note::new(agent_id.clone(), title, content)
-            .with_luhmann_id(luhmann_id);
-        let node = note.to_node();
+        // Create "continues" edge
+        let mut props = Properties::new();
+        props.insert("context".to_string(), PropertyValue::String("Continues on next note".to_string()));
+        
+        let edge = Edge::new(
+            "continues",
+            self.to_node_id(from_id),
+            self.to_node_id(to_id),
+            props,
+        );
+        
+        self.storage.create_edge(&edge).await?;
+        Ok(())
+    }
+
+    async fn create_index(&self, parent_id: &LuhmannId) -> Result<Note> {
+        // Verify parent exists
+        let parent_note = self.get_note(parent_id).await?;
+        
+        // Find all direct children (notes that are immediate descendants)
+        let all_notes = self.list_notes().await?;
+        
+        let children: Vec<&Note> = all_notes
+            .iter()
+            .filter(|note| {
+                // Check if note's parent is the parent_id
+                note.id.parent().as_ref() == Some(parent_id)
+            })
+            .collect();
+        
+        // Create index note ID: {parent_id}0 (e.g., 1a -> 1a0)
+        let index_id = LuhmannId::parse(&format!("{}0", parent_id))
+            .ok_or_else(|| KbError::InvalidLuhmannId(format!("{}0", parent_id)))?;
+        
+        // Check if index already exists
+        let index_node_id = self.to_node_id(&index_id);
+        match self.storage.get_node(index_node_id).await {
+            Ok(_) => return Err(KbError::NoteAlreadyExists(index_id)),
+            Err(StorageError::NodeNotFound(_)) => (), // Good, doesn't exist
+            Err(e) => return Err(KbError::Storage(e)),
+        }
+        
+        // Build index content
+        let mut content = format!("# Index: {}\n\n", parent_note.title);
+        content.push_str(&format!("Parent note: [[{}]]\n\n", parent_id));
+        content.push_str("Children:\n\n");
+        
+        if children.is_empty() {
+            content.push_str("(No children)\n");
+        } else {
+            for child in &children {
+                content.push_str(&format!("- [[{}]]: {}\n", child.id, child.title));
+            }
+        }
+        
+        // Create the index note
+        let index_note = Note::new(
+            index_id.clone(),
+            format!("Index: {}", parent_note.title),
+            content,
+        );
+        
+        let node = index_note.to_node();
         self.storage.create_node(&node).await?;
         
-        // Create ownership edge from agent to note
+        // Create "child_of" relationship to parent
+        let mut props = Properties::new();
+        props.insert("context".to_string(), PropertyValue::String("Index of children".to_string()));
+        
         let edge = Edge::new(
-            "owns_note",
-            string_to_node_id(&agent_id),
-            note.id,
-            Properties::new(),
+            "child_of",
+            index_node_id,
+            self.to_node_id(parent_id),
+            props,
         );
         self.storage.create_edge(&edge).await?;
         
-        Ok(note)
+        Ok(index_note)
     }
-
-    async fn create_note_branch(
-        &self,
-        agent_id: AgentId,
-        parent_note_id: NoteId,
-        title: impl Into<String> + Send,
-        content: impl Into<String> + Send,
-    ) -> Result<Note> {
-        // Get parent note to find its Luhmann ID
-        let parent_note = self.get_note(parent_note_id).await?;
+    
+    async fn get_context(&self, note_id: &LuhmannId) -> Result<NoteContext> {
+        // Get the note itself
+        let note = self.get_note(note_id).await?;
         
-        let parent_luhmann_id = parent_note.luhmann_id
-            .ok_or_else(|| KbError::NoteNotFound(parent_note_id))?;
+        // Get parent (if any)
+        let parent = if let Some(parent_id) = note.id.parent() {
+            self.get_note(&parent_id).await.ok()
+        } else {
+            None
+        };
         
-        // Generate the next available child ID
-        let child_id = self.get_next_available_id(agent_id.clone(), Some(&parent_luhmann_id)).await?;
-        
-        // Create the note with the Luhmann ID
-        let note = self.create_note_with_luhmann_id(
-            agent_id,
-            child_id.clone(),
-            title,
-            content,
-        ).await?;
-        
-        // Create reference link to parent
-        self.link_notes(note.id, parent_note_id, LinkType::References, Some(format!("Branch of {}", parent_luhmann_id))).await?;
-        
-        Ok(note)
-    }
-
-    async fn get_note_by_luhmann_id(&self, agent_id: AgentId, luhmann_id: &LuhmannId) -> Result<Option<Note>> {
-        // Get all notes for this agent and find the one with matching Luhmann ID
-        let notes = self.list_agent_notes(agent_id).await?;
-        
-        Ok(notes.into_iter()
-            .find(|note| note.luhmann_id.as_ref() == Some(luhmann_id)))
-    }
-
-    async fn get_next_available_id(&self, agent_id: AgentId, parent_id: Option<&LuhmannId>) -> Result<LuhmannId> {
-        let all_notes = self.list_agent_notes(agent_id).await?;
-        
-        // Collect all existing Luhmann IDs at the specified level
-        let existing_ids: Vec<LuhmannId> = all_notes
-            .iter()
-            .filter_map(|note| note.luhmann_id.clone())
-            .filter(|id| {
-                if let Some(parent) = parent_id {
-                    // Check if this ID is a direct child of the parent
-                    id.parent().as_ref() == Some(parent)
-                } else {
-                    // Top-level IDs have no parent
-                    id.parent().is_none()
-                }
-            })
+        // Get all children (direct descendants)
+        let all_notes = self.list_notes().await?;
+        let children: Vec<Note> = all_notes
+            .into_iter()
+            .filter(|n| n.id.parent().as_ref() == Some(note_id))
             .collect();
         
-        if let Some(parent) = parent_id {
-            // Generate next sibling under parent
-            if existing_ids.is_empty() {
-                // First child of parent
-                Ok(parent.first_child())
-            } else {
-                // Find the last child and get next sibling
-                let mut sorted = existing_ids.clone();
-                sorted.sort();
-                if let Some(last) = sorted.last() {
-                    Ok(last.next_sibling()
-                        .unwrap_or_else(|| last.first_child()))
-                } else {
-                    Ok(parent.first_child())
-                }
+        // Get links (notes this note links TO)
+        let links = self.get_links(note_id).await?;
+        let mut links_to = Vec::new();
+        for link in &links {
+            if let Ok(target_note) = self.get_note(&link.to_note_id).await {
+                links_to.push(target_note);
             }
-        } else {
-            // Top-level - generate next main topic ID
-            if existing_ids.is_empty() {
-                Ok(LuhmannId { parts: vec![crate::services::kb::domain::LuhmannPart::Number(1)] })
-            } else {
-                let mut sorted = existing_ids;
-                sorted.sort();
-                if let Some(last) = sorted.last() {
-                    Ok(last.next_sibling()
-                        .unwrap_or_else(|| LuhmannId { parts: vec![crate::services::kb::domain::LuhmannPart::Number(1)] }))
-                } else {
-                    Ok(LuhmannId { parts: vec![crate::services::kb::domain::LuhmannPart::Number(1)] })
+        }
+        
+        // Get backlinks (notes that link TO this note via "references" edges)
+        let node_id = self.to_node_id(note_id);
+        let edges = self.storage.get_edges_to(node_id, Some("references")).await?;
+        let mut backlinks = Vec::new();
+        for edge in edges {
+            if let Ok(source_node) = self.storage.get_node(edge.from_node_id).await {
+                if let Some(note) = Note::from_node(&source_node) {
+                    backlinks.push(note);
                 }
             }
         }
+        
+        // Get continuations (notes this note "continues" to)
+        // Need to query for "continues" edges
+        let note_node_id = self.to_node_id(note_id);
+        let neighbors = self.storage
+            .get_neighbors(note_node_id, Some("continues"), EdgeDirection::Outgoing)
+            .await?;
+        
+        let mut continues_to = Vec::new();
+        for node in neighbors {
+            if let Some(luhmann_str) = node.get_property("luhmann_id").and_then(|v| v.as_str()) {
+                if let Some(target_id) = LuhmannId::parse(luhmann_str) {
+                    if let Ok(target_note) = self.get_note(&target_id).await {
+                        continues_to.push(target_note);
+                    }
+                }
+            }
+        }
+        
+        // Get notes that continue FROM this note (reverse of continues)
+        let incoming_neighbors = self.storage
+            .get_neighbors(note_node_id, Some("continues"), EdgeDirection::Incoming)
+            .await?;
+        
+        let mut continued_from = Vec::new();
+        for node in incoming_neighbors {
+            if let Some(luhmann_str) = node.get_property("luhmann_id").and_then(|v| v.as_str()) {
+                if let Some(source_id) = LuhmannId::parse(luhmann_str) {
+                    if let Ok(source_note) = self.get_note(&source_id).await {
+                        continued_from.push(source_note);
+                    }
+                }
+            }
+        }
+        
+        Ok(NoteContext {
+            note,
+            parent,
+            children,
+            links_to,
+            backlinks,
+            continues_to,
+            continued_from,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::memory::InMemoryStorage;
+
+    #[tokio::test]
+    async fn test_create_note_auto_id() {
+        let storage = InMemoryStorage::new();
+        let kb = KnowledgeBaseServiceImpl::new(storage);
+        
+        // First note should get ID "1"
+        let note1 = kb.create_note("First Note", "Content 1").await.unwrap();
+        assert_eq!(note1.id.to_string(), "1");
+        
+        // Second note should get ID "2"
+        let note2 = kb.create_note("Second Note", "Content 2").await.unwrap();
+        assert_eq!(note2.id.to_string(), "2");
     }
 
-    async fn list_notes_by_luhmann_prefix(&self, agent_id: AgentId, prefix: &LuhmannId) -> Result<Vec<Note>> {
-        let all_notes = self.list_agent_notes(agent_id).await?;
+    #[tokio::test]
+    async fn test_create_note_with_specific_id() {
+        let storage = InMemoryStorage::new();
+        let kb = KnowledgeBaseServiceImpl::new(storage);
         
-        // Filter notes whose Luhmann ID starts with the prefix
-        let filtered: Vec<Note> = all_notes
-            .into_iter()
-            .filter(|note| {
-                if let Some(ref lid) = note.luhmann_id {
-                    lid.is_descendant_of(prefix) || lid == prefix
-                } else {
-                    false
-                }
-            })
-            .collect();
+        let id = LuhmannId::parse("1a").unwrap();
+        let note = kb.create_note_with_id(id.clone(), "Note 1a", "Content").await.unwrap();
+        assert_eq!(note.id, id);
+    }
+
+    #[tokio::test]
+    async fn test_create_branch() {
+        let storage = InMemoryStorage::new();
+        let kb = KnowledgeBaseServiceImpl::new(storage);
         
-        Ok(filtered)
+        // Create parent note "1"
+        let parent_id = LuhmannId::parse("1").unwrap();
+        kb.create_note_with_id(parent_id.clone(), "Parent", "Parent content").await.unwrap();
+        
+        // Create branch - should get ID "1a"
+        let child = kb.create_branch(&parent_id, "Child", "Child content").await.unwrap();
+        assert_eq!(child.id.to_string(), "1a");
+        
+        // Create another branch - should get ID "1b"
+        let child2 = kb.create_branch(&parent_id, "Child 2", "Child content 2").await.unwrap();
+        assert_eq!(child2.id.to_string(), "1b");
+    }
+
+    #[tokio::test]
+    async fn test_duplicate_id_fails() {
+        let storage = InMemoryStorage::new();
+        let kb = KnowledgeBaseServiceImpl::new(storage);
+        
+        let id = LuhmannId::parse("1").unwrap();
+        kb.create_note_with_id(id.clone(), "First", "Content").await.unwrap();
+        
+        // Creating with same ID should fail
+        let result = kb.create_note_with_id(id, "Second", "Content").await;
+        assert!(matches!(result, Err(KbError::NoteAlreadyExists(_))));
+    }
+
+    #[tokio::test]
+    async fn test_get_note() {
+        let storage = InMemoryStorage::new();
+        let kb = KnowledgeBaseServiceImpl::new(storage);
+        
+        let note = kb.create_note("Test", "Content").await.unwrap();
+        let retrieved = kb.get_note(&note.id).await.unwrap();
+        
+        assert_eq!(retrieved.title, "Test");
+        assert_eq!(retrieved.content, "Content");
+    }
+
+    #[tokio::test]
+    async fn test_list_notes() {
+        let storage = InMemoryStorage::new();
+        let kb = KnowledgeBaseServiceImpl::new(storage);
+        
+        kb.create_note_with_id(LuhmannId::parse("2").unwrap(), "Second", "Content").await.unwrap();
+        kb.create_note_with_id(LuhmannId::parse("1").unwrap(), "First", "Content").await.unwrap();
+        kb.create_note_with_id(LuhmannId::parse("1a").unwrap(), "Child", "Content").await.unwrap();
+        
+        let notes = kb.list_notes().await.unwrap();
+        
+        // Should be sorted by Luhmann ID
+        assert_eq!(notes.len(), 3);
+        assert_eq!(notes[0].id.to_string(), "1");
+        assert_eq!(notes[1].id.to_string(), "1a");
+        assert_eq!(notes[2].id.to_string(), "2");
+    }
+
+    #[tokio::test]
+    async fn test_list_by_prefix() {
+        let storage = InMemoryStorage::new();
+        let kb = KnowledgeBaseServiceImpl::new(storage);
+        
+        kb.create_note_with_id(LuhmannId::parse("1").unwrap(), "One", "Content").await.unwrap();
+        kb.create_note_with_id(LuhmannId::parse("1a").unwrap(), "One-A", "Content").await.unwrap();
+        kb.create_note_with_id(LuhmannId::parse("1a1").unwrap(), "One-A-One", "Content").await.unwrap();
+        kb.create_note_with_id(LuhmannId::parse("1b").unwrap(), "One-B", "Content").await.unwrap();
+        kb.create_note_with_id(LuhmannId::parse("2").unwrap(), "Two", "Content").await.unwrap();
+        
+        let prefix = LuhmannId::parse("1a").unwrap();
+        let notes = kb.list_notes_by_prefix(&prefix).await.unwrap();
+        
+        assert_eq!(notes.len(), 2); // 1a and 1a1
+        assert!(notes.iter().any(|n| n.id.to_string() == "1a"));
+        assert!(notes.iter().any(|n| n.id.to_string() == "1a1"));
+    }
+
+    #[tokio::test]
+    async fn test_search_notes() {
+        let storage = InMemoryStorage::new();
+        let kb = KnowledgeBaseServiceImpl::new(storage);
+        
+        kb.create_note("Rust Programming", "A systems language").await.unwrap();
+        kb.create_note("Python Basics", "Easy to learn").await.unwrap();
+        kb.create_note("Rust vs Go", "Comparison").await.unwrap();
+        
+        let results = kb.search_notes("rust").await.unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_link_notes() {
+        let storage = InMemoryStorage::new();
+        let kb = KnowledgeBaseServiceImpl::new(storage);
+        
+        let note1 = kb.create_note("First", "Content").await.unwrap();
+        let note2 = kb.create_note("Second", "Content").await.unwrap();
+        
+        kb.link_notes(&note1.id, &note2.id, Some("See also".to_string())).await.unwrap();
+        
+        let links = kb.get_links(&note1.id).await.unwrap();
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].to_note_id, note2.id);
+    }
+
+    #[tokio::test]
+    async fn test_self_link_fails() {
+        let storage = InMemoryStorage::new();
+        let kb = KnowledgeBaseServiceImpl::new(storage);
+        
+        let note = kb.create_note("Note", "Content").await.unwrap();
+        
+        let result = kb.link_notes(&note.id, &note.id, None).await;
+        assert!(matches!(result, Err(KbError::SelfLink)));
+    }
+
+    #[tokio::test]
+    async fn test_mark_continuation() {
+        let storage = InMemoryStorage::new();
+        let kb = KnowledgeBaseServiceImpl::new(storage);
+        
+        let id1 = LuhmannId::parse("1").unwrap();
+        let id2 = LuhmannId::parse("2").unwrap();
+        
+        kb.create_note_with_id(id1.clone(), "First", "Content 1").await.unwrap();
+        kb.create_note_with_id(id2.clone(), "Second", "Content 2").await.unwrap();
+        
+        // Mark note 1 as continuing to note 2
+        kb.mark_continuation(&id1, &id2).await.unwrap();
+        
+        // Self-continuation should fail
+        let result = kb.mark_continuation(&id1, &id1).await;
+        assert!(matches!(result, Err(KbError::SelfLink)));
+    }
+
+    #[tokio::test]
+    async fn test_create_index() {
+        let storage = InMemoryStorage::new();
+        let kb = KnowledgeBaseServiceImpl::new(storage);
+        
+        // Create parent and children
+        let parent_id = LuhmannId::parse("1").unwrap();
+        kb.create_note_with_id(parent_id.clone(), "Parent Note", "Parent content").await.unwrap();
+        
+        let child1_id = LuhmannId::parse("1a").unwrap();
+        kb.create_note_with_id(child1_id.clone(), "First Child", "Child 1 content").await.unwrap();
+        
+        let child2_id = LuhmannId::parse("1b").unwrap();
+        kb.create_note_with_id(child2_id.clone(), "Second Child", "Child 2 content").await.unwrap();
+        
+        // Create grandchild (should not appear in index)
+        let grandchild_id = LuhmannId::parse("1a1").unwrap();
+        kb.create_note_with_id(grandchild_id.clone(), "Grandchild", "Grandchild content").await.unwrap();
+        
+        // Create index
+        let index = kb.create_index(&parent_id).await.unwrap();
+        
+        // Index ID should be {parent_id}0
+        assert_eq!(index.id.to_string(), "10");
+        // Should contain references to children
+        assert!(index.content.contains("1a"));
+        assert!(index.content.contains("1b"));
+        assert!(index.content.contains("First Child"));
+        assert!(index.content.contains("Second Child"));
+        // Should NOT contain grandchild
+        assert!(!index.content.contains("1a1"));
     }
 }

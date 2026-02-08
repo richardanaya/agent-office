@@ -9,6 +9,7 @@ use std::net::SocketAddr;
 pub mod templates;
 
 use crate::services::mail::{MailService, MailServiceImpl};
+use crate::services::kb::{KnowledgeBaseService, KnowledgeBaseServiceImpl, LuhmannId};
 use crate::storage::{memory::InMemoryStorage, postgres::PostgresStorage};
 
 pub async fn run_web_server(

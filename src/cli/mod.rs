@@ -1,5 +1,4 @@
 use clap::{Parser, Subcommand};
-use uuid::Uuid;
 
 #[derive(Parser)]
 #[command(name = "agent-office")]
@@ -118,115 +117,79 @@ pub enum DbCommands {
     Setup,
 }
 
+/// Simplified KB commands - shared knowledge base, only Luhmann IDs
 #[derive(Subcommand)]
 pub enum KbCommands {
-    /// Initialize a knowledge base for an agent
-    Init {
+    /// Create a new note (auto-generates ID unless --id specified)
+    /// Usage: kb create "Title" "Content"  OR  kb create --id 1a "Title" "Content"
+    Create {
+        /// Optional Luhmann ID (e.g., 1a, 1a1). If not provided, auto-generates next available ID
         #[arg(short, long)]
-        agent_id: String,
-        #[arg(short, long)]
-        name: String,
-    },
-    /// Create a new note with auto-generated Luhmann ID
-    Note {
-        #[arg(short, long)]
-        agent_id: String,
-        #[arg(short, long)]
+        id: Option<String>,
+        /// Note title
         title: String,
-        #[arg(short, long)]
+        /// Note content
         content: String,
     },
-    /// Create a note with specific Luhmann ID (e.g., 1a2b)
-    NoteWithId {
-        #[arg(short, long)]
-        agent_id: String,
-        #[arg(short, long)]
-        luhmann_id: String,
-        #[arg(short, long)]
-        title: String,
-        #[arg(short, long)]
-        content: String,
-    },
-    /// Branch from an existing note (create child)
+    /// Create a child note (branch) from a parent
+    /// Usage: kb branch 1 "Child Title" "Content"
     Branch {
-        #[arg(short, long)]
-        agent_id: String,
-        #[arg(short, long)]
-        parent_note_id: Uuid,
-        #[arg(short, long)]
+        /// Parent Luhmann ID
+        parent_luhmann_id: String,
+        /// Note title
         title: String,
-        #[arg(short, long)]
+        /// Note content
         content: String,
     },
-    /// List all notes in an agent's knowledge base
-    List {
-        #[arg(short, long)]
-        agent_id: String,
-    },
-    /// Get a specific note by ID
+    /// List all notes (sorted by Luhmann ID)
+    List,
+    /// Get a specific note by Luhmann ID
+    /// Usage: kb get 1a
     Get {
-        #[arg(short, long)]
-        note_id: Uuid,
-    },
-    /// Get a note by its Luhmann address
-    GetByLuhmann {
-        #[arg(short, long)]
-        agent_id: String,
-        #[arg(short, long)]
+        /// Luhmann ID
         luhmann_id: String,
     },
     /// Link two notes together
+    /// Usage: kb link 1a 1b
     Link {
-        #[arg(short, long)]
-        from: Uuid,
-        #[arg(short, long)]
-        to: Uuid,
+        /// Source Luhmann ID
+        from_luhmann_id: String,
+        /// Target Luhmann ID
+        to_luhmann_id: String,
+        /// Optional context for the link
         #[arg(short, long)]
         context: Option<String>,
     },
-    /// Show backlinks (notes that link to this note)
-    Backlinks {
-        #[arg(short, long)]
-        note_id: Uuid,
-    },
-    /// Show related notes within N hops
-    Related {
-        #[arg(short, long)]
-        note_id: Uuid,
-        #[arg(short, long, default_value = "2")]
-        depth: usize,
-    },
-    /// Show notes by Luhmann ID prefix
-    Tree {
-        #[arg(short, long)]
-        agent_id: String,
-        #[arg(short, long)]
-        prefix: String,
-    },
     /// Search notes
+    /// Usage: kb search "query"
     Search {
-        #[arg(short, long)]
-        agent_id: String,
-        #[arg(short, long)]
+        /// Search query
         query: String,
     },
-    /// Add a tag to a note
-    Tag {
-        #[arg(short, long)]
-        note_id: Uuid,
-        #[arg(short, long)]
-        tag: String,
+    /// Show notes by Luhmann ID prefix
+    /// Usage: kb tree 1a
+    Tree {
+        /// Luhmann ID prefix
+        prefix: String,
     },
-    /// List all tags for an agent
-    Tags {
-        #[arg(short, long)]
-        agent_id: String,
+    /// Mark that note A continues on note B (linear chain)
+    /// Usage: kb cont 1a 1b
+    Cont {
+        /// Source Luhmann ID (the note that continues)
+        from_luhmann_id: String,
+        /// Target Luhmann ID (the continuation)
+        to_luhmann_id: String,
     },
-    /// Show the graph around a note
-    Graph {
-        #[arg(short, long)]
-        note_id: Uuid,
-        #[arg(short, long, default_value = "2")]
-        depth: usize,
+    /// Create an index card listing all children of a note
+    /// Usage: kb index 1a
+    Index {
+        /// Luhmann ID to create index for
+        luhmann_id: String,
+    },
+    /// Show full context of a note (parent, children, links, continuations, backlinks)
+    /// Usage: kb context 1a
+    Context {
+        /// Luhmann ID to show context for
+        luhmann_id: String,
     },
 }
