@@ -33,22 +33,10 @@ pub enum Commands {
 
 #[derive(Subcommand)]
 pub enum MailCommands {
-    /// Create a new mailbox for an agent (legacy, agents auto-create inbox now)
-    Create {
-        #[arg(short, long)]
-        owner_id: String,
-        #[arg(short, long)]
-        name: String,
-    },
-    /// List all mailboxes for an agent
-    List {
-        #[arg(short, long)]
+    /// View recent mail for an agent (last 24 hours)
+    Recent {
+        /// Agent ID to view mail for
         agent_id: String,
-    },
-    /// Delete a mailbox
-    Delete {
-        #[arg(short, long)]
-        mailbox_id: Uuid,
     },
     /// Send mail from one agent to another (SIMPLE - uses agent names only!)
     Send {
@@ -91,6 +79,13 @@ pub enum MailCommands {
         /// Bash command to execute when unread mail is found
         #[arg(short, long)]
         bash: String,
+    },
+    /// Search mail by subject or body content
+    Search {
+        /// Agent ID to search mail for
+        agent_id: String,
+        /// Search query string (searches in subject and body)
+        query: String,
     },
 }
 

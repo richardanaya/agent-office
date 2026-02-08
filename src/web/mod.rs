@@ -139,13 +139,14 @@ async fn dashboard(database_url: Option<String>) -> Html<String> {
     
     let content = format!(
         r#"
-        <h2>Agents & Mailboxes</h2>
+        <h2>Dashboard <span class="section-count">{} agents</span></h2>
         <div class="agent-list">
             {}
         </div>
         "#,
+        agents.len(),
         if agent_cards.is_empty() {
-            "<p class='empty-state'>No agents found</p>".to_string()
+            "<p class='empty-state'>No agents registered yet</p>".to_string()
         } else {
             agent_cards
         }
@@ -197,12 +198,12 @@ async fn list_agents(database_url: Option<String>) -> Html<String> {
     
     let content = format!(
         r#"
-        <h2>👥 Agents</h2>
-        <table style="width: 100%; border-collapse: collapse;">
+        <h2>Agents <span class="section-count">{} total</span></h2>
+        <table class="data-table">
             <thead>
-                <tr style="border-bottom: 2px solid #ecf0f1;">
-                    <th style="text-align: left; padding: 10px;">Name</th>
-                    <th style="text-align: left; padding: 10px;">Status</th>
+                <tr>
+                    <th>Name</th>
+                    <th>Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -210,8 +211,9 @@ async fn list_agents(database_url: Option<String>) -> Html<String> {
             </tbody>
         </table>
         "#,
+        agents.len(),
         if agent_rows.is_empty() {
-            "<tr><td colspan='2' class='empty-state'>No agents found</td></tr>".to_string()
+            "<tr><td colspan=\"2\" class=\"empty-state\">No agents registered</td></tr>".to_string()
         } else {
             agent_rows
         }
@@ -266,12 +268,12 @@ async fn inbox_view(database_url: Option<String>, agent_id: String) -> Html<Stri
             Err(_) => return Html(templates::error_page(&format!("Agent '{}' not found", agent_id))),
         };
         
-        let inbox = match service.get_agent_inbox(agent_id.clone()).await {
-            Ok(i) => i,
-            Err(_) => return Html(templates::error_page("Failed to get inbox")),
+        let mailbox = match service.get_agent_mailbox(agent_id.clone()).await {
+            Ok(m) => m,
+            Err(_) => return Html(templates::error_page("Failed to get mailbox")),
         };
         
-        let mail = match service.get_mailbox_inbox(inbox.id).await {
+        let mail = match service.get_mailbox_inbox(mailbox.id).await {
             Ok(m) => m,
             Err(_) => vec![],
         };
@@ -286,12 +288,12 @@ async fn inbox_view(database_url: Option<String>, agent_id: String) -> Html<Stri
             Err(_) => return Html(templates::error_page(&format!("Agent '{}' not found", agent_id))),
         };
         
-        let inbox = match service.get_agent_inbox(agent_id.clone()).await {
-            Ok(i) => i,
-            Err(_) => return Html(templates::error_page("Failed to get inbox")),
+        let mailbox = match service.get_agent_mailbox(agent_id.clone()).await {
+            Ok(m) => m,
+            Err(_) => return Html(templates::error_page("Failed to get mailbox")),
         };
         
-        let mail = match service.get_mailbox_inbox(inbox.id).await {
+        let mail = match service.get_mailbox_inbox(mailbox.id).await {
             Ok(m) => m,
             Err(_) => vec![],
         };
@@ -317,13 +319,16 @@ async fn inbox_view(database_url: Option<String>, agent_id: String) -> Html<Stri
     
     let content = format!(
         r#"
-        <h2>📧 Inbox: {}</h2>
-        <p><a href="/" class="btn">← Back to Agents</a></p>
+        <div class="back-link">
+            <a href="/" class="btn btn-secondary btn-sm">&larr; Back to Dashboard</a>
+        </div>
+        <h2>Inbox: {} <span class="section-count">{} messages</span></h2>
         <div class="mail-list">
             {}
         </div>
         "#,
         agent_name,
+        inbox_mail.len(),
         if mail_html.is_empty() {
             "<p class='empty-state'>No mail in inbox</p>".to_string()
         } else {

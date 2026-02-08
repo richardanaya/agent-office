@@ -108,99 +108,53 @@ async fn handle_mail_command(
     cmd: MailCommands,
 ) -> anyhow::Result<()> {
     match cmd {
-        MailCommands::Create { owner_id, name } => {
-            let mailbox = service.create_mailbox(owner_id, name).await?;
-            println!("Created mailbox: {} (ID: {})", mailbox.name, mailbox.id);
-            println!("Owner: {}", mailbox.owner_id);
-        }
-        MailCommands::List { agent_id } => {
-            let mailboxes = service.list_agent_mailboxes(agent_id.clone()).await?;
-            if mailboxes.is_empty() {
-                println!("No mailboxes found for agent {}", agent_id);
+        MailCommands::Recent { agent_id } => {
+            let mailbox = service.get_agent_mailbox(agent_id.clone()).await?;
+            let mails = service.get_recent_mail(mailbox.id, 24, 50).await?;
+            if mails.is_empty() {
+                println!("No recent mail for agent {}", agent_id);
             } else {
-                println!("Mailboxes for agent {}:", agent_id);
-                for mailbox in mailboxes {
-                    println!("  - {} (ID: {})", mailbox.name, mailbox.id);
+                println!("Recent mail for agent {} (last 24 hours):", agent_id);
+                for mail in mails {
+                    let status = if mail.read { "[Read]" } else { "[Unread]" };
+                    match service.get_agent_by_mailbox(mail.from_mailbox_id).await {
+                        Ok(sender) => println!("  {} [{}] from {}: {}", status, &mail.id.to_string()[..8], sender.name, mail.subject),
+                        Err(_) => println!("  {} [{}]: {}", status, &mail.id.to_string()[..8], mail.subject),
+                    }
                 }
             }
         }
-        MailCommands::Delete { mailbox_id } => {
-            service.delete_mailbox(mailbox_id).await?;
-            println!("Deleted mailbox: {}", mailbox_id);
-        }
-        MailCommands::Send {
-            from,
-            to,
-            subject,
-            body,
-        } => {
-            // Simple agent-to-agent send using names only
-            let _mail = service.send_agent_to_agent(from.clone(), to.clone(), subject.clone(), body).await?;
+        MailCommands::Send { from, to, subject, body } => {
+            service.send_agent_to_agent(from.clone(), to.clone(), subject.clone(), body).await?;
             println!("✉️  {} -> {}: {}", from, to, subject);
         }
         MailCommands::Inbox { agent_id } => {
-            // Get the agent's inbox and show mail
-            let inbox = service.get_agent_inbox(agent_id.clone()).await?;
-            let mails = service.get_mailbox_inbox(inbox.id).await?;
+            let mailbox = service.get_agent_mailbox(agent_id.clone()).await?;
+            let mails = service.get_mailbox_inbox(mailbox.id).await?;
             if mails.is_empty() {
                 println!("Inbox is empty for agent {}", agent_id);
             } else {
                 println!("Inbox for agent {}:", agent_id);
                 for mail in mails {
                     let status = if mail.read { "[Read]" } else { "[Unread]" };
-                    // Try to get sender name
-                    match service.get_mailbox_owner(mail.from_mailbox_id).await {
-                        Ok(sender) => {
-                            if sender.id != sender.name {
-                                println!("  {} [{}] from {} ({}): {}", 
-                                    status, 
-                                    &mail.id.to_string()[..8], 
-                                    sender.name, 
-                                    sender.id,
-                                    mail.subject);
-                            } else {
-                                println!("  {} [{}] from {}: {}", 
-                                    status, 
-                                    &mail.id.to_string()[..8], 
-                                    sender.name,
-                                    mail.subject);
-                            }
-                        }
-                        Err(_) => {
-                            println!("  {} [{}]: {}", status, &mail.id.to_string()[..8], mail.subject);
-                        }
+                    match service.get_agent_by_mailbox(mail.from_mailbox_id).await {
+                        Ok(sender) => println!("  {} [{}] from {}: {}", status, &mail.id.to_string()[..8], sender.name, mail.subject),
+                        Err(_) => println!("  {} [{}]: {}", status, &mail.id.to_string()[..8], mail.subject),
                     }
                 }
             }
         }
         MailCommands::Outbox { agent_id } => {
-            // Get the agent's outbox and show sent mail
-            let outbox = service.get_agent_outbox(agent_id.clone()).await?;
-            let mails = service.get_mailbox_outbox(outbox.id).await?;
+            let mailbox = service.get_agent_mailbox(agent_id.clone()).await?;
+            let mails = service.get_mailbox_outbox(mailbox.id).await?;
             if mails.is_empty() {
                 println!("Outbox is empty for agent {}", agent_id);
             } else {
                 println!("Outbox for agent {}:", agent_id);
                 for mail in mails {
-                    // Try to get recipient name
-                    match service.get_mailbox_owner(mail.to_mailbox_id).await {
-                        Ok(recipient) => {
-                            if recipient.id != recipient.name {
-                                println!("  [{}] to {} ({}): {}", 
-                                    &mail.id.to_string()[..8],
-                                    recipient.name,
-                                    recipient.id,
-                                    mail.subject);
-                            } else {
-                                println!("  [{}] to {}: {}", 
-                                    &mail.id.to_string()[..8],
-                                    recipient.name,
-                                    mail.subject);
-                            }
-                        }
-                        Err(_) => {
-                            println!("  [{}]: {}", &mail.id.to_string()[..8], mail.subject);
-                        }
+                    match service.get_agent_by_mailbox(mail.to_mailbox_id).await {
+                        Ok(recipient) => println!("  [{}] to {}: {}", &mail.id.to_string()[..8], recipient.name, mail.subject),
+                        Err(_) => println!("  [{}]: {}", &mail.id.to_string()[..8], mail.subject),
                     }
                 }
             }
@@ -214,20 +168,9 @@ async fn handle_mail_command(
             if has_unread {
                 println!("📬 Agent '{}' has {} unread message(s)", agent_id, mails.len());
                 for mail in &mails {
-                    // Try to get sender name
-                    match service.get_mailbox_owner(mail.from_mailbox_id).await {
-                        Ok(sender) => {
-                            if sender.id != sender.name {
-                                println!("  [Unread] from {} ({}): {}", 
-                                    sender.name, sender.id, mail.subject);
-                            } else {
-                                println!("  [Unread] from {}: {}", 
-                                    sender.name, mail.subject);
-                            }
-                        }
-                        Err(_) => {
-                            println!("  [Unread]: {}", mail.subject);
-                        }
+                    match service.get_agent_by_mailbox(mail.from_mailbox_id).await {
+                        Ok(sender) => println!("  [Unread] from {}: {}", sender.name, mail.subject),
+                        Err(_) => println!("  [Unread]: {}", mail.subject),
                     }
                 }
             } else {
@@ -238,71 +181,71 @@ async fn handle_mail_command(
             use tokio::time::{sleep, Duration};
             use std::process::Command;
             
-            // Set agent to online
-            let agent_id_clone = agent_id.clone();
-            let _ = service.set_agent_status(agent_id_clone.clone(), "online").await;
-            println!("Agent '{}' is now online", agent_id_clone);
-            
-            println!("Starting watch for agent {} (checking every {} seconds)", agent_id, interval);
+            let _ = service.set_agent_status(agent_id.clone(), "online").await;
+            println!("Agent '{}' is now online", agent_id);
+            println!("Watching for new mail (checking every {} seconds)", interval);
             println!("Press Ctrl+C to stop");
             
-            // Set up Ctrl+C handler
             let ctrl_c = tokio::signal::ctrl_c();
             tokio::pin!(ctrl_c);
-            
             let interval_duration = Duration::from_secs(interval);
             let mut running = true;
             
             while running {
                 tokio::select! {
                     _ = &mut ctrl_c => {
-                        println!("\nReceived Ctrl+C, shutting down...");
+                        println!("\nStopping watch...");
                         running = false;
                     }
                     _ = sleep(interval_duration) => {
                         let (has_unread, mails) = service.check_unread_mail(agent_id.clone()).await?;
-                        
                         if has_unread {
-                            println!("\n[{}] Found {} unread message(s) for agent {}", 
-                                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), 
-                                mails.len(), 
-                                agent_id);
-                            
+                            println!("\n📬 Found {} unread message(s)", mails.len());
                             for mail in &mails {
-                                println!("  [Unread] {} - {}", mail.id, mail.subject);
+                                println!("  - {}", mail.subject);
                             }
-                            
-                            // Execute the bash command
                             println!("Executing: {}", bash);
-                            let output = Command::new("bash")
-                                .arg("-c")
-                                .arg(&bash)
-                                .output();
-                            
-                            match output {
-                                Ok(result) => {
-                                    if result.status.success() {
-                                        let stdout = String::from_utf8_lossy(&result.stdout);
-                                        if !stdout.is_empty() {
-                                            println!("Output:\n{}", stdout);
-                                        }
-                                    } else {
-                                        let stderr = String::from_utf8_lossy(&result.stderr);
-                                        eprintln!("Command failed: {}", stderr);
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to execute command: {}", e);
-                                }
-                            }
+                            let _ = Command::new("bash").arg("-c").arg(&bash).output();
                         }
                     }
                 }
             }
             
-            // Set agent to offline on exit
             let _ = service.set_agent_status(agent_id.clone(), "offline").await;
             println!("Agent '{}' is now offline", agent_id);
+        }
+        MailCommands::Search { agent_id, query } => {
+            let mailbox = service.get_agent_mailbox(agent_id.clone()).await?;
+            let inbox = service.get_mailbox_inbox(mailbox.id).await?;
+            let outbox = service.get_mailbox_outbox(mailbox.id).await?;
+            
+            let query_lower = query.to_lowercase();
+            let mut results: Vec<_> = inbox.iter()
+                .chain(outbox.iter())
+                .filter(|m| {
+                    m.subject.to_lowercase().contains(&query_lower) ||
+                    m.body.to_lowercase().contains(&query_lower)
+                })
+                .collect();
+            
+            // Sort by date, newest first
+            results.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+            
+            if results.is_empty() {
+                println!("No mail found matching '{}' for agent {}", query, agent_id);
+            } else {
+                println!("Found {} mail(s) matching '{}' for agent {}:", results.len(), query, agent_id);
+                for mail in results {
+                    let direction = if inbox.iter().any(|m| m.id == mail.id) { "📥" } else { "📤" };
+                    let status = if mail.read { "Read" } else { "Unread" };
+                    let other_agent = if direction == "📥" {
+                        service.get_agent_by_mailbox(mail.from_mailbox_id).await.map(|a| a.name).unwrap_or_else(|_| "Unknown".to_string())
+                    } else {
+                        service.get_agent_by_mailbox(mail.to_mailbox_id).await.map(|a| a.name).unwrap_or_else(|_| "Unknown".to_string())
+                    };
+                    println!("  {} [{}] {} - {} (with {})", direction, status, &mail.id.to_string()[..8], mail.subject, other_agent);
+                }
+            }
         }
     }
     Ok(())
@@ -345,12 +288,9 @@ async fn handle_agent_command(
             }
             println!("Status: {}", agent.status);
             
-            // Also show their mailboxes
-            let mailboxes = service.list_agent_mailboxes(id).await?;
-            println!("Mailboxes: {}", mailboxes.len());
-            for mailbox in mailboxes {
-                println!("  - {}", mailbox.name);
-            }
+            // Each agent has exactly one mailbox
+            let _mailbox = service.get_agent_mailbox(id).await?;
+            println!("Mailbox: ✓ (single mailbox per agent)");
         }
         AgentCommands::Status { id, status } => {
             let agent = service.set_agent_status(id.clone(), status.clone()).await?;

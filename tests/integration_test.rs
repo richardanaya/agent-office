@@ -7,27 +7,25 @@ async fn test_full_mail_workflow() {
     let storage = InMemoryStorage::new();
     let service = MailServiceImpl::new(storage);
     
-    // Create two agents
+    // Create two agents (each auto-creates a single mailbox)
     let alice = service.create_agent("Alice").await.unwrap();
     let bob = service.create_agent("Bob").await.unwrap();
     let alice_id = alice.id.clone();
     let bob_id = bob.id.clone();
     println!("Created agents: Alice ({}), Bob ({})", alice_id, bob_id);
     
-    // Create mailboxes
-    let alice_inbox = service.create_mailbox(alice.id.clone(), "Inbox").await.unwrap();
-    let alice_outbox = service.create_mailbox(alice.id.clone(), "Outbox").await.unwrap();
-    let bob_inbox = service.create_mailbox(bob.id.clone(), "Inbox").await.unwrap();
+    // Get their mailboxes (each agent has exactly one)
+    let alice_mailbox = service.get_agent_mailbox(alice.id.clone()).await.unwrap();
+    let bob_mailbox = service.get_agent_mailbox(bob.id.clone()).await.unwrap();
     
-    println!("Created mailboxes:");
-    println!("  Alice Inbox: {}", alice_inbox.id);
-    println!("  Alice Outbox: {}", alice_outbox.id);
-    println!("  Bob Inbox: {}", bob_inbox.id);
+    println!("Agent mailboxes (single mailbox per agent):");
+    println!("  Alice mailbox: {} (same as agent ID)", alice_mailbox.id);
+    println!("  Bob mailbox: {} (same as agent ID)", bob_mailbox.id);
     
-    // Send mail from Alice to Bob
-    let mail1 = service.send_mail(
-        alice_outbox.id,
-        bob_inbox.id,
+    // Send mail from Alice to Bob using agent IDs directly
+    let mail1 = service.send_agent_to_agent(
+        alice_id.clone(),
+        bob_id.clone(),
         "Hello Bob!",
         "This is Alice. Nice to meet you!",
     ).await.unwrap();
@@ -38,27 +36,29 @@ async fn test_full_mail_workflow() {
     println!("  Mail ID: {}", mail1.id);
     
     // Send reply from Bob to Alice
-    let _mail2 = service.send_mail(
-        bob_inbox.id,  // Bob sends from his inbox (simplified model)
-        alice_inbox.id,
+    let _mail2 = service.send_agent_to_agent(
+        bob_id.clone(),
+        alice_id.clone(),
         "Re: Hello Bob!",
         "Hi Alice! Thanks for reaching out.",
     ).await.unwrap();
     
     // Check Bob's inbox
-    let bob_inbox_contents = service.get_mailbox_inbox(bob_inbox.id).await.unwrap();
-    println!("\nBob's inbox has {} mail(s)", bob_inbox_contents.len());
-    for mail in &bob_inbox_contents {
+    let bob_inbox = service.get_mailbox_inbox(bob_mailbox.id).await.unwrap();
+    println!("\nBob's inbox has {} mail(s)", bob_inbox.len());
+    for mail in &bob_inbox {
+        let sender = service.get_agent_by_mailbox(mail.from_mailbox_id).await.unwrap();
         let status = if mail.read { "Read" } else { "Unread" };
-        println!("  [{}] {} - {} (from {})", status, mail.id, mail.subject, mail.from_mailbox_id);
+        println!("  [{}] {} - {} (from {})", status, mail.id, mail.subject, sender.name);
     }
     
     // Check Alice's inbox
-    let alice_inbox_contents = service.get_mailbox_inbox(alice_inbox.id).await.unwrap();
-    println!("\nAlice's inbox has {} mail(s)", alice_inbox_contents.len());
-    for mail in &alice_inbox_contents {
+    let alice_inbox = service.get_mailbox_inbox(alice_mailbox.id).await.unwrap();
+    println!("\nAlice's inbox has {} mail(s)", alice_inbox.len());
+    for mail in &alice_inbox {
+        let sender = service.get_agent_by_mailbox(mail.from_mailbox_id).await.unwrap();
         let status = if mail.read { "Read" } else { "Unread" };
-        println!("  [{}] {} - {} (from {})", status, mail.id, mail.subject, mail.from_mailbox_id);
+        println!("  [{}] {} - {} (from {})", status, mail.id, mail.subject, sender.name);
     }
     
     // Mark mail as read
@@ -66,10 +66,11 @@ async fn test_full_mail_workflow() {
     println!("\nMarked mail {} as read", mail1.id);
     
     // Check Alice's outbox
-    let alice_outbox_contents = service.get_mailbox_outbox(alice_outbox.id).await.unwrap();
-    println!("\nAlice's outbox has {} mail(s)", alice_outbox_contents.len());
-    for mail in &alice_outbox_contents {
-        println!("  {} - {} (to {})", mail.id, mail.subject, mail.to_mailbox_id);
+    let alice_outbox = service.get_mailbox_outbox(alice_mailbox.id).await.unwrap();
+    println!("\nAlice's outbox has {} mail(s)", alice_outbox.len());
+    for mail in &alice_outbox {
+        let recipient = service.get_agent_by_mailbox(mail.to_mailbox_id).await.unwrap();
+        println!("  {} - {} (to {})", mail.id, mail.subject, recipient.name);
     }
     
     // List all agents
@@ -79,10 +80,6 @@ async fn test_full_mail_workflow() {
         println!("  {} - {}", agent.id, agent.name);
     }
     
-    // List Alice's mailboxes
-    let alice_mailboxes = service.list_agent_mailboxes(alice_id).await.unwrap();
-    println!("\nAlice's mailboxes: {}", alice_mailboxes.len());
-    for mailbox in alice_mailboxes {
-        println!("  {} - {}", mailbox.id, mailbox.name);
-    }
+    // Each agent has exactly one mailbox (their own agent ID)
+    println!("\nEach agent has exactly one mailbox (agent ID = mailbox ID)");
 }
