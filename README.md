@@ -1,31 +1,31 @@
 # Agent Office
 
-A Rust-based multi-agent system with graph-structured data storage, featuring a mail system and Zettelkasten-style knowledge base.
+A Rust-based multi-agent system featuring a mail system and Zettelkasten-style knowledge base.
 
 ## Features
 
 - **Multi-Agent System**: Create and manage agents with status tracking
 - **Mail System**: Agents can send and receive messages via mailboxes
 - **Knowledge Base**: Zettelkasten-style notes with Luhmann addressing (1, 1a, 1a1)
-- **Web Interface**: HTMX-based UI for browsing agents and mail
-- **Graph Storage**: PostgreSQL-backed graph database for relationships
+- **Web Interface**: HTMX-based UI for browsing agents and mail and kb
 
 ## Quick Start
 
 ```bash
 # Set up database
 export AGENT_OFFICE_URL="postgresql://user:pass@localhost/agent_office"
-cargo run -- db setup
+cargo install agent-office
+agent-office db setup
 
 # Create agents
-cargo run -- agent create alice
-cargo run -- agent create bob
+agent-office agent create alice
+agent-office  agent create bob
 
 # Send mail
-cargo run -- mail send alice bob "Hello" "Message body"
+agent-office mail send alice bob "Hello" "Message body"
 
 # Start web server
-cargo run -- web -p 8080
+agent-office  -p 8080
 ```
 
 ## Configuration
