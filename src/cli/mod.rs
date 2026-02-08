@@ -59,10 +59,13 @@ pub enum MailCommands {
         #[arg(short, long)]
         agent_id: String,
     },
-    /// Mark mail as read
+    /// Mark mail as read by short ID (first 8 chars of UUID)
     Read {
+        /// Agent who owns the mail
         #[arg(short, long)]
-        mail_id: Uuid,
+        agent_id: String,
+        /// Short mail ID (first 8 characters of UUID)
+        mail_id: String,
     },
     /// Check if agent should look at their mail (has unread messages)
     ShouldLook {

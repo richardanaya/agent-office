@@ -61,6 +61,9 @@ pub trait MailService: Send + Sync {
     // Mark mail as read
     async fn mark_mail_as_read(&self, mail_id: uuid::Uuid) -> Result<Mail>;
     
+    // Mark mail as read by short ID (8-char prefix)
+    async fn mark_mail_as_read_by_short_id(&self, agent_id: AgentId, short_id: &str) -> Result<Mail>;
+    
     // Check if agent has unread mail
     async fn check_unread_mail(&self, agent_id: AgentId) -> Result<(bool, Vec<Mail>)>;
 }
@@ -272,6 +275,32 @@ impl<S: GraphStorage> MailService for MailServiceImpl<S> {
         self.storage.update_node(&node).await?;
         
         Ok(mail)
+    }
+
+    async fn mark_mail_as_read_by_short_id(&self, agent_id: AgentId, short_id: &str) -> Result<Mail> {
+        // Get all mail for the agent
+        let mailbox = self.get_agent_mailbox(agent_id).await?;
+        let inbox = self.get_mailbox_inbox(mailbox.id).await?;
+        let outbox = self.get_mailbox_outbox(mailbox.id).await?;
+        
+        // Find mail with matching short ID prefix
+        let short_id_lower = short_id.to_lowercase();
+        let all_mail: Vec<_> = inbox.into_iter().chain(outbox.into_iter()).collect();
+        
+        let matching: Vec<_> = all_mail.into_iter()
+            .filter(|m| m.id.to_string().to_lowercase().starts_with(&short_id_lower))
+            .collect();
+        
+        match matching.len() {
+            0 => Err(MailError::MailNotFound(uuid::Uuid::nil())),
+            1 => {
+                let mail_id = matching[0].id;
+                self.mark_mail_as_read(mail_id).await
+            }
+            _ => Err(MailError::InvalidOperation(
+                format!("Multiple mails match short ID '{}', please use full ID", short_id)
+            )),
+        }
     }
 
     async fn check_unread_mail(&self, agent_id: AgentId) -> Result<(bool, Vec<Mail>)> {

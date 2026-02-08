@@ -117,9 +117,10 @@ async fn handle_mail_command(
                 println!("Recent mail for agent {} (last 24 hours):", agent_id);
                 for mail in mails {
                     let status = if mail.read { "[Read]" } else { "[Unread]" };
+                    let short_id = &mail.id.to_string()[..8];
                     match service.get_agent_by_mailbox(mail.from_mailbox_id).await {
-                        Ok(sender) => println!("  {} [{}] from {}: {}", status, &mail.id.to_string()[..8], sender.name, mail.subject),
-                        Err(_) => println!("  {} [{}]: {}", status, &mail.id.to_string()[..8], mail.subject),
+                        Ok(sender) => println!("  {} [{}] from {}: {}", status, short_id, sender.name, mail.subject),
+                        Err(_) => println!("  {} [{}]: {}", status, short_id, mail.subject),
                     }
                 }
             }
@@ -137,9 +138,10 @@ async fn handle_mail_command(
                 println!("Inbox for agent {}:", agent_id);
                 for mail in mails {
                     let status = if mail.read { "[Read]" } else { "[Unread]" };
+                    let short_id = &mail.id.to_string()[..8];
                     match service.get_agent_by_mailbox(mail.from_mailbox_id).await {
-                        Ok(sender) => println!("  {} [{}] from {}: {}", status, &mail.id.to_string()[..8], sender.name, mail.subject),
-                        Err(_) => println!("  {} [{}]: {}", status, &mail.id.to_string()[..8], mail.subject),
+                        Ok(sender) => println!("  {} [{}] from {}: {}", status, short_id, sender.name, mail.subject),
+                        Err(_) => println!("  {} [{}]: {}", status, short_id, mail.subject),
                     }
                 }
             }
@@ -152,15 +154,16 @@ async fn handle_mail_command(
             } else {
                 println!("Outbox for agent {}:", agent_id);
                 for mail in mails {
+                    let short_id = &mail.id.to_string()[..8];
                     match service.get_agent_by_mailbox(mail.to_mailbox_id).await {
-                        Ok(recipient) => println!("  [{}] to {}: {}", &mail.id.to_string()[..8], recipient.name, mail.subject),
-                        Err(_) => println!("  [{}]: {}", &mail.id.to_string()[..8], mail.subject),
+                        Ok(recipient) => println!("  [{}] to {}: {}", short_id, recipient.name, mail.subject),
+                        Err(_) => println!("  [{}]: {}", short_id, mail.subject),
                     }
                 }
             }
         }
-        MailCommands::Read { mail_id } => {
-            let mail = service.mark_mail_as_read(mail_id).await?;
+        MailCommands::Read { agent_id, mail_id } => {
+            let mail = service.mark_mail_as_read_by_short_id(agent_id, &mail_id).await?;
             println!("✓ Marked as read: {}", mail.subject);
         }
         MailCommands::ShouldLook { agent_id } => {
@@ -238,12 +241,13 @@ async fn handle_mail_command(
                 for mail in results {
                     let direction = if inbox.iter().any(|m| m.id == mail.id) { "📥" } else { "📤" };
                     let status = if mail.read { "Read" } else { "Unread" };
+                    let short_id = &mail.id.to_string()[..8];
                     let other_agent = if direction == "📥" {
                         service.get_agent_by_mailbox(mail.from_mailbox_id).await.map(|a| a.name).unwrap_or_else(|_| "Unknown".to_string())
                     } else {
                         service.get_agent_by_mailbox(mail.to_mailbox_id).await.map(|a| a.name).unwrap_or_else(|_| "Unknown".to_string())
                     };
-                    println!("  {} [{}] {} - {} (with {})", direction, status, &mail.id.to_string()[..8], mail.subject, other_agent);
+                    println!("  {} [{}] {} - {} (with {})", direction, status, short_id, mail.subject, other_agent);
                 }
             }
         }
