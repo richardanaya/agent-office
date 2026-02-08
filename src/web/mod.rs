@@ -9,7 +9,8 @@ use std::net::SocketAddr;
 pub mod templates;
 
 use crate::services::mail::{MailService, MailServiceImpl};
-use crate::services::kb::{KnowledgeBaseService, KnowledgeBaseServiceImpl, LuhmannId};
+use crate::services::kb::{KnowledgeBaseService, KnowledgeBaseServiceImpl};
+use crate::services::kb::domain::LuhmannId;
 use crate::storage::{memory::InMemoryStorage, postgres::PostgresStorage};
 
 pub async fn run_web_server(
@@ -34,7 +35,10 @@ fn create_router(database_url: Option<String>) -> Router {
     use std::sync::Arc;
     let db_url = Arc::new(database_url.clone());
     let db_url2 = Arc::new(database_url.clone());
-    let db_url3 = Arc::new(database_url);
+    let db_url3 = Arc::new(database_url.clone());
+    let db_url4 = Arc::new(database_url.clone());
+    let db_url5 = Arc::new(database_url.clone());
+    let db_url6 = Arc::new(database_url.clone());
     
     Router::new()
         // Dashboard / Home
@@ -59,6 +63,24 @@ fn create_router(database_url: Option<String>) -> Router {
         .route("/agents/{agent_id}/status", post({
             let db = db_url3.clone();
             move |Path(agent_id): Path<String>| set_agent_status((*db).clone(), agent_id)
+        }))
+        
+        // KB - Knowledge Base
+        .route("/kb", get({
+            let db = db_url4.clone();
+            move || kb_list_notes((*db).clone())
+        }))
+        
+        // KB - View specific note
+        .route("/kb/note/{note_id}", get({
+            let db = db_url5.clone();
+            move |Path(note_id): Path<String>| kb_view_note((*db).clone(), note_id)
+        }))
+        
+        // KB - Tree view by prefix
+        .route("/kb/tree/{prefix}", get({
+            let db = db_url6.clone();
+            move |Path(prefix): Path<String>| kb_tree_view((*db).clone(), prefix)
         }))
         
         // Static assets
@@ -156,7 +178,7 @@ async fn dashboard(database_url: Option<String>) -> Html<String> {
     Html(templates::wrap_content(content))
 }
 
-// List all agents (separate page)
+// List all agents
 async fn list_agents(database_url: Option<String>) -> Html<String> {
     let agents = if let Some(url) = database_url {
         let pool = match sqlx::postgres::PgPool::connect(&url).await {
@@ -218,6 +240,366 @@ async fn list_agents(database_url: Option<String>) -> Html<String> {
         } else {
             agent_rows
         }
+    );
+    
+    Html(templates::wrap_content(content))
+}
+
+// KB - List all notes
+async fn kb_list_notes(database_url: Option<String>) -> Html<String> {
+    let notes = if let Some(url) = database_url {
+        let pool = match sqlx::postgres::PgPool::connect(&url).await {
+            Ok(p) => p,
+            Err(_) => return Html(templates::error_page("Failed to connect to database")),
+        };
+        let storage = PostgresStorage::new(pool);
+        let service = KnowledgeBaseServiceImpl::new(storage);
+        
+        match service.list_notes().await {
+            Ok(notes) => notes,
+            Err(_) => return Html(templates::error_page("Failed to load notes")),
+        }
+    } else {
+        let storage = InMemoryStorage::new();
+        let service = KnowledgeBaseServiceImpl::new(storage);
+        
+        match service.list_notes().await {
+            Ok(notes) => notes,
+            Err(_) => return Html(templates::error_page("Failed to load notes")),
+        }
+    };
+    
+    let mut notes_html = String::new();
+    for note in &notes {
+        notes_html.push_str(&format!(
+            r#"<div class="note-card">
+                <div class="note-header">
+                    <span class="note-id"><a href="/kb/note/{}">[{}]</a></span>
+                    <span class="note-title">{}</span>
+                </div>
+                <div class="note-preview">{}</div>
+                <div class="note-meta">
+                    <a href="/kb/tree/{}" class="btn btn-sm">🌳 Tree</a>
+                </div>
+            </div>"#,
+            note.id,
+            note.id,
+            note.title,
+            &note.content.chars().take(100).collect::<String>(),
+            note.id
+        ));
+    }
+    
+    let content = format!(
+        r#"
+        <div class="page-header">
+            <h2>📚 Knowledge Base</h2>
+            <div class="header-actions">
+                <span class="note-count">{} notes</span>
+            </div>
+        </div>
+        <div class="notes-list">
+            {}
+        </div>
+        "#,
+        notes.len(),
+        if notes_html.is_empty() {
+            "<p class='empty-state'>No notes yet. Use 'kb create' to add notes.</p>".to_string()
+        } else {
+            notes_html
+        }
+    );
+    
+    Html(templates::wrap_content(content))
+}
+
+// KB - View specific note with full context
+async fn kb_view_note(database_url: Option<String>, note_id: String) -> Html<String> {
+    let id = match LuhmannId::parse(&note_id) {
+        Some(id) => id,
+        None => return Html(templates::error_page(&format!("Invalid Luhmann ID: {}", note_id))),
+    };
+    
+    let (note, children, parent, links, backlinks) = if let Some(url) = database_url {
+        let pool = match sqlx::postgres::PgPool::connect(&url).await {
+            Ok(p) => p,
+            Err(_) => return Html(templates::error_page("Failed to connect to database")),
+        };
+        let storage = PostgresStorage::new(pool);
+        let service = KnowledgeBaseServiceImpl::new(storage);
+        
+        let note = match service.get_note(&id).await {
+            Ok(n) => n,
+            Err(_) => return Html(templates::error_page(&format!("Note '{}' not found", note_id))),
+        };
+        
+        // Get children
+        let all_notes = match service.list_notes().await {
+            Ok(n) => n,
+            Err(_) => vec![],
+        };
+        let children: Vec<_> = all_notes.iter()
+            .filter(|n| n.id.parent().as_ref() == Some(&id))
+            .cloned()
+            .collect();
+        
+        // Get parent
+        let parent = if let Some(parent_id) = id.parent() {
+            service.get_note(&parent_id).await.ok()
+        } else {
+            None
+        };
+        
+        // Get links
+        let links = match service.get_links(&id).await {
+            Ok(l) => {
+                let mut linked_notes = vec![];
+                for link in l {
+                    if let Ok(target) = service.get_note(&link.to_note_id).await {
+                        linked_notes.push(target);
+                    }
+                }
+                linked_notes
+            },
+            Err(_) => vec![],
+        };
+        
+        // Get backlinks via context
+        let ctx = match service.get_context(&id).await {
+            Ok(c) => c.backlinks,
+            Err(_) => vec![],
+        };
+        
+        (note, children, parent, links, ctx)
+    } else {
+        let storage = InMemoryStorage::new();
+        let service = KnowledgeBaseServiceImpl::new(storage);
+        
+        let note = match service.get_note(&id).await {
+            Ok(n) => n,
+            Err(_) => return Html(templates::error_page(&format!("Note '{}' not found", note_id))),
+        };
+        
+        // Get children
+        let all_notes = match service.list_notes().await {
+            Ok(n) => n,
+            Err(_) => vec![],
+        };
+        let children: Vec<_> = all_notes.iter()
+            .filter(|n| n.id.parent().as_ref() == Some(&id))
+            .cloned()
+            .collect();
+        
+        // Get parent
+        let parent = if let Some(parent_id) = id.parent() {
+            service.get_note(&parent_id).await.ok()
+        } else {
+            None
+        };
+        
+        // Get links
+        let links = match service.get_links(&id).await {
+            Ok(l) => {
+                let mut linked_notes = vec![];
+                for link in l {
+                    if let Ok(target) = service.get_note(&link.to_note_id).await {
+                        linked_notes.push(target);
+                    }
+                }
+                linked_notes
+            },
+            Err(_) => vec![],
+        };
+        
+        // Get backlinks via context
+        let ctx = match service.get_context(&id).await {
+            Ok(c) => c.backlinks,
+            Err(_) => vec![],
+        };
+        
+        (note, children, parent, links, ctx)
+    };
+    
+    // Build relationships HTML
+    let mut relations_html = String::new();
+    
+    if let Some(p) = parent {
+        relations_html.push_str(&format!(
+            r#"<div class="relation-section">
+                <h4>📁 Parent</h4>
+                <a href="/kb/note/{}" class="relation-link">[{}] {}</a>
+            </div>"#,
+            p.id, p.id, p.title
+        ));
+    }
+    
+    if !children.is_empty() {
+        relations_html.push_str(r#"<div class="relation-section"><h4>📂 Children</h4>"#);
+        for child in &children {
+            relations_html.push_str(&format!(
+                r#"<a href="/kb/note/{}" class="relation-link">└─ [{}] {}</a>"#,
+                child.id, child.id, child.title
+            ));
+        }
+        relations_html.push_str("</div>");
+    }
+    
+    if !links.is_empty() {
+        relations_html.push_str(r#"<div class="relation-section"><h4>🔗 Links To</h4>"#);
+        for link in &links {
+            relations_html.push_str(&format!(
+                r#"<a href="/kb/note/{}" class="relation-link">→ [{}] {}</a>"#,
+                link.id, link.id, link.title
+            ));
+        }
+        relations_html.push_str("</div>");
+    }
+    
+    if !backlinks.is_empty() {
+        relations_html.push_str(r#"<div class="relation-section"><h4>🔗 Backlinks</h4>"#);
+        for backlink in &backlinks {
+            relations_html.push_str(&format!(
+                r#"<a href="/kb/note/{}" class="relation-link">← [{}] {}</a>"#,
+                backlink.id, backlink.id, backlink.title
+            ));
+        }
+        relations_html.push_str("</div>");
+    }
+    
+    let content = format!(
+        r#"
+        <div class="note-detail">
+            <div class="note-breadcrumb">
+                <a href="/kb">📚 KB</a> / <span>[{}]</span>
+            </div>
+            <h2 class="note-title-large">[{}] {}</h2>
+            <div class="note-content-full">
+                {}
+            </div>
+            <div class="note-meta-bar">
+                <span>Created: {}</span>
+                <a href="/kb/tree/{}" class="btn btn-sm">🌳 View in Tree</a>
+            </div>
+        </div>
+        <div class="note-relationships">
+            {}
+        </div>
+        "#,
+        note_id,
+        note_id,
+        note.title,
+        note.content.replace("\n", "<br>"),
+        note.created_at.format("%Y-%m-%d %H:%M"),
+        note_id,
+        if relations_html.is_empty() {
+            "<p class='empty-state'>No relationships yet</p>".to_string()
+        } else {
+            relations_html
+        }
+    );
+    
+    Html(templates::wrap_content(content))
+}
+
+// KB - Tree view by prefix
+async fn kb_tree_view(database_url: Option<String>, prefix: String) -> Html<String> {
+    let prefix_id = match LuhmannId::parse(&prefix) {
+        Some(id) => id,
+        None => return Html(templates::error_page(&format!("Invalid prefix: {}", prefix))),
+    };
+    
+    let (notes_in_tree, parent_note) = if let Some(url) = database_url {
+        let pool = match sqlx::postgres::PgPool::connect(&url).await {
+            Ok(p) => p,
+            Err(_) => return Html(templates::error_page("Failed to connect to database")),
+        };
+        let storage = PostgresStorage::new(pool);
+        let service = KnowledgeBaseServiceImpl::new(storage);
+        
+        let all_notes = match service.list_notes().await {
+            Ok(n) => n,
+            Err(_) => return Html(templates::error_page("Failed to load notes")),
+        };
+        
+        // Filter notes that are in this tree
+        let notes_in_tree: Vec<_> = all_notes.iter()
+            .filter(|n| n.id.to_string().starts_with(&prefix))
+            .cloned()
+            .collect();
+        
+        // Get parent note if exists
+        let parent = if let Some(parent_id) = prefix_id.parent() {
+            service.get_note(&parent_id).await.ok()
+        } else {
+            None
+        };
+        
+        (notes_in_tree, parent)
+    } else {
+        let storage = InMemoryStorage::new();
+        let service = KnowledgeBaseServiceImpl::new(storage);
+        
+        let all_notes = match service.list_notes().await {
+            Ok(n) => n,
+            Err(_) => return Html(templates::error_page("Failed to load notes")),
+        };
+        
+        let notes_in_tree: Vec<_> = all_notes.iter()
+            .filter(|n| n.id.to_string().starts_with(&prefix))
+            .cloned()
+            .collect();
+        
+        let parent = if let Some(parent_id) = prefix_id.parent() {
+            service.get_note(&parent_id).await.ok()
+        } else {
+            None
+        };
+        
+        (notes_in_tree, parent)
+    };
+    
+    // Build tree visualization
+    let mut tree_html = String::new();
+    
+    if let Some(parent) = parent_note {
+        tree_html.push_str(&format!(
+            r#"<div class="tree-level parent-level">
+                <a href="/kb/note/{}" class="tree-node parent-node">📁 [{}] {}</a>
+            </div>"#,
+            parent.id, parent.id, parent.title
+        ));
+    }
+    
+    tree_html.push_str(r#"<div class="tree-level current-level">"#);
+    for note in &notes_in_tree {
+        let is_current = note.id.to_string() == prefix;
+        let node_class = if is_current { "tree-node current-node" } else { "tree-node" };
+        let icon = if note.id.to_string().len() > prefix.len() { "📄" } else { "📂" };
+        tree_html.push_str(&format!(
+            r#"<a href="/kb/note/{}" class="{}">{} [{}] {}</a>"#,
+            note.id, node_class, icon, note.id, note.title
+        ));
+    }
+    tree_html.push_str("</div>");
+    
+    let content = format!(
+        r#"
+        <div class="tree-view">
+            <div class="tree-header">
+                <h2>🌳 Tree View: {}</h2>
+                <a href="/kb" class="btn btn-sm">← Back to All Notes</a>
+            </div>
+            <div class="tree-structure">
+                {}
+            </div>
+            <div class="tree-stats">
+                <span>{} notes in this branch</span>
+            </div>
+        </div>
+        "#,
+        prefix,
+        tree_html,
+        notes_in_tree.len()
     );
     
     Html(templates::wrap_content(content))

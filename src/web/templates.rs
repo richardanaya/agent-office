@@ -21,6 +21,7 @@ pub const HTML_HEADER: &str = r#"<!DOCTYPE html>
                 <div class="navbar-links">
                     <a href="/">Dashboard</a>
                     <a href="/agents">Agents</a>
+                    <a href="/kb">KB</a>
                 </div>
             </div>
         </nav>
@@ -827,6 +828,257 @@ textarea.form-control {
         padding: 16px 12px;
     }
 }
+
+/* --- Knowledge Base Styles --- */
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--color-border-light);
+}
+
+.page-header h2 {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.note-count {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+}
+
+.notes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.note-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.note-card:hover {
+    border-color: var(--color-primary-border);
+    box-shadow: var(--shadow-sm);
+}
+
+.note-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.note-id {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--color-primary);
+    font-weight: 500;
+}
+
+.note-id a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.note-id a:hover {
+    text-decoration: underline;
+}
+
+.note-title {
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.note-preview {
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 12px;
+}
+
+.note-meta {
+    display: flex;
+    gap: 8px;
+}
+
+/* Note Detail Page */
+.note-detail {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.note-breadcrumb {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    margin-bottom: 12px;
+}
+
+.note-breadcrumb a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.note-breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+.note-title-large {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 0 0 16px 0;
+    color: var(--color-text);
+}
+
+.note-content-full {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--color-text);
+    margin-bottom: 20px;
+}
+
+.note-meta-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-border-light);
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+/* Note Relationships */
+.note-relationships {
+    background: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 20px;
+}
+
+.relation-section {
+    margin-bottom: 16px;
+}
+
+.relation-section:last-child {
+    margin-bottom: 0;
+}
+
+.relation-section h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin: 0 0 8px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.relation-link {
+    display: block;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: var(--color-text);
+    font-size: 13px;
+    transition: background var(--transition-fast);
+}
+
+.relation-link:hover {
+    background: var(--color-primary-light);
+    border-color: var(--color-primary-border);
+}
+
+/* Tree View */
+.tree-view {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+}
+
+.tree-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--color-border-light);
+}
+
+.tree-header h2 {
+    font-size: 20px;
+    margin: 0;
+}
+
+.tree-structure {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tree-level {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-left: 0;
+}
+
+.tree-level.parent-level {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--color-border);
+}
+
+.tree-node {
+    display: block;
+    padding: 10px 14px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: var(--color-text);
+    font-size: 14px;
+    transition: all var(--transition-fast);
+}
+
+.tree-node:hover {
+    background: var(--color-surface-raised);
+    border-color: var(--color-primary-border);
+}
+
+.tree-node.parent-node {
+    background: var(--color-neutral-bg);
+    font-weight: 500;
+}
+
+.tree-node.current-node {
+    background: var(--color-primary-light);
+    border-color: var(--color-primary);
+    font-weight: 500;
+}
+
+.tree-stats {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-border-light);
+    font-size: 13px;
+    color: var(--color-text-muted);
+}
+
 "##;
 
 pub fn wrap_content(content: impl AsRef<str>) -> String {
