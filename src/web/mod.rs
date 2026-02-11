@@ -832,20 +832,24 @@ async fn send_mail(database_url: Option<String>, body: axum::body::Bytes) -> Htm
         let storage = PostgresStorage::new(pool);
         let service = MailServiceImpl::new(storage);
         
+        let subject = format!("Message from {}", from_human);
+        
         service.send_agent_to_agent(
             from_human.clone(),
             to_agent.clone(),
-            "Human Message",
+            subject,
             body_text.clone(),
         ).await
     } else {
         let storage = InMemoryStorage::new();
         let service = MailServiceImpl::new(storage);
         
+        let subject = format!("Message from {}", from_human);
+        
         service.send_agent_to_agent(
             from_human.clone(),
             to_agent.clone(),
-            "Human Message",
+            subject,
             body_text.clone(),
         ).await
     };
