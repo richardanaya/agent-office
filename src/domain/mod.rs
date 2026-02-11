@@ -50,18 +50,8 @@ impl Node {
         }
     }
 
-    pub fn with_id(mut self, id: NodeId) -> Self {
-        self.id = id;
-        self
-    }
-
     pub fn get_property(&self, key: &str) -> Option<&PropertyValue> {
         self.properties.get(key)
-    }
-
-    pub fn set_property(&mut self, key: impl Into<String>, value: PropertyValue) {
-        self.properties.insert(key.into(), value);
-        self.updated_at = chrono::Utc::now();
     }
 }
 
@@ -113,23 +103,6 @@ impl GraphQuery {
 
     pub fn with_node_type(mut self, node_type: impl Into<String>) -> Self {
         self.node_types = Some(vec![node_type.into()]);
-        self
-    }
-
-    pub fn with_edge_type(mut self, edge_type: impl Into<String>) -> Self {
-        self.edge_types = Some(vec![edge_type.into()]);
-        self
-    }
-
-    pub fn with_filter(mut self, key: impl Into<String>, value: PropertyValue) -> Self {
-        let mut filters = self.property_filters.unwrap_or_default();
-        filters.insert(key.into(), value);
-        self.property_filters = Some(filters);
-        self
-    }
-
-    pub fn with_limit(mut self, limit: usize) -> Self {
-        self.limit = Some(limit);
         self
     }
 }

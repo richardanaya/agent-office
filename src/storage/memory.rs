@@ -1,5 +1,5 @@
 use crate::domain::{Edge, EdgeId, GraphQuery, Node, NodeId};
-use crate::storage::{EdgeDirection, GraphStorage, Result, StorageError, SearchQuery, SearchResults, OrderBy, OrderDirection};
+use crate::storage::{EdgeDirection, GraphStorage, Result, StorageError, SearchQuery, SearchResults};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -177,22 +177,6 @@ impl GraphStorage for InMemoryStorage {
         Ok(edge.clone())
     }
 
-    async fn get_edge(&self, id: EdgeId) -> Result<Edge> {
-        let edges = self.edges.read().await;
-        edges.get(&id)
-            .cloned()
-            .ok_or(StorageError::EdgeNotFound(id))
-    }
-
-    async fn delete_edge(&self, id: EdgeId) -> Result<()> {
-        let mut edges = self.edges.write().await;
-        if !edges.contains_key(&id) {
-            return Err(StorageError::EdgeNotFound(id));
-        }
-        edges.remove(&id);
-        Ok(())
-    }
-
     async fn get_edges_from(&self, node_id: NodeId, edge_type: Option<&str>) -> Result<Vec<Edge>> {
         let edges = self.edges.read().await;
         let results: Vec<Edge> = edges
@@ -240,15 +224,6 @@ impl GraphStorage for InMemoryStorage {
                 EdgeDirection::Incoming if edge.to_node_id == node_id && matches_type => {
                     neighbor_ids.push(edge.from_node_id);
                 }
-                EdgeDirection::Both if matches_type && 
-                    (edge.from_node_id == node_id || edge.to_node_id == node_id) => {
-                    let neighbor_id = if edge.from_node_id == node_id {
-                        edge.to_node_id
-                    } else {
-                        edge.from_node_id
-                    };
-                    neighbor_ids.push(neighbor_id);
-                }
                 _ => {}
             }
         }
@@ -265,58 +240,23 @@ impl GraphStorage for InMemoryStorage {
         let nodes = self.nodes.read().await;
         
         // Filter nodes based on query criteria
-        let mut results: Vec<Node> = nodes.values()
+        let results: Vec<Node> = nodes.values()
             .filter(|node| Self::matches_search_query(node, query))
             .cloned()
             .collect();
         
-        // Sort results
-        results.sort_by(|a, b| {
-            let cmp = match query.order_by {
-                OrderBy::CreatedAt => a.created_at.cmp(&b.created_at),
-                OrderBy::UpdatedAt => a.updated_at.cmp(&b.updated_at),
-                OrderBy::Relevance => a.updated_at.cmp(&b.updated_at), // Fallback
-            };
-            
-            match query.order_direction {
-                OrderDirection::Asc => cmp,
-                OrderDirection::Desc => cmp.reverse(),
-            }
-        });
-        
-        let total_count = results.len();
+        // Apply pagination
         let offset = query.offset;
         let limit = query.limit;
         
-        // Check if there are more results
-        let has_more = results.len() > offset + limit;
-        
-        // Apply pagination
         let paginated: Vec<Node> = results.into_iter()
             .skip(offset)
             .take(limit)
             .collect();
         
-        let returned_count = paginated.len();
-        
         Ok(SearchResults {
             items: paginated,
-            total_count,
-            returned_count,
-            has_more,
-            limit,
-            offset,
         })
-    }
-    
-    async fn count_nodes(&self, query: &SearchQuery) -> Result<usize> {
-        let nodes = self.nodes.read().await;
-        
-        let count = nodes.values()
-            .filter(|node| Self::matches_search_query(node, query))
-            .count();
-        
-        Ok(count)
     }
 }
 

@@ -165,6 +165,43 @@ async fn handle_db_command(
             println!("Tables created: nodes, edges");
             println!("Indexes created for performance");
         }
+        DbCommands::Reset => {
+            let url = database_url.ok_or_else(|| {
+                anyhow::anyhow!("DATABASE_URL environment variable not set")
+            })?;
+            
+            // Confirmation prompt
+            println!("⚠️  WARNING: This will DELETE ALL DATA in the database!");
+            println!("   All agents, mail, knowledge base notes, and everything else will be permanently removed.");
+            println!();
+            print!("Are you sure you want to reset the database? Type 'yes' to confirm: ");
+            std::io::Write::flush(&mut std::io::stdout())?;
+            
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            let input = input.trim();
+            
+            if input != "yes" {
+                println!("Reset cancelled.");
+                return Ok(());
+            }
+            
+            println!();
+            println!("Connecting to database...");
+            let pool = sqlx::postgres::PgPool::connect(&url).await?;
+            let storage = PostgresStorage::new(pool);
+            
+            println!("Resetting database - dropping all tables...");
+            storage.setup_tables().await.map_err(|e| {
+                anyhow::anyhow!("Failed to reset database: {}", e)
+            })?;
+            
+            println!();
+            println!("✅ Database reset complete!");
+            println!("   All previous data has been cleared.");
+            println!("   Fresh tables created: nodes, edges");
+            println!("   Your database is now ready for new data.");
+        }
     }
     Ok(())
 }

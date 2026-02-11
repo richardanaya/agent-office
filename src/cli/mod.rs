@@ -134,6 +134,8 @@ pub enum AgentCommands {
 pub enum DbCommands {
     /// Setup database tables (drops existing tables if they exist)
     Setup,
+    /// Reset the entire database - drops all data and recreates fresh tables
+    Reset,
 }
 
 /// Simplified KB commands - shared knowledge base, only Luhmann IDs

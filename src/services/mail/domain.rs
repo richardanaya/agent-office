@@ -16,52 +16,7 @@ pub struct Mailbox {
     pub created_at: Timestamp,
 }
 
-impl Mailbox {
-    pub fn new(owner_id: AgentId, name: impl Into<String>) -> Self {
-        Self {
-            id: MailboxId::new_v4(),
-            owner_id,
-            name: name.into(),
-            created_at: Utc::now(),
-        }
-    }
-
-    pub fn to_node(&self) -> Node {
-        let mut props = Properties::new();
-        props.insert(
-            "owner_id".to_string(),
-            PropertyValue::String(self.owner_id.to_string()),
-        );
-        props.insert("name".to_string(), PropertyValue::String(self.name.clone()));
-
-        let mut node = Node::new("mailbox", props);
-        node.id = self.id;
-        node
-    }
-
-    pub fn from_node(node: &Node) -> Option<Self> {
-        if node.node_type != "mailbox" {
-            return None;
-        }
-
-        let owner_id = node.get_property("owner_id").and_then(|v| match v {
-            PropertyValue::String(s) => Some(s.clone()),
-            _ => None,
-        })?;
-
-        let name = node.get_property("name").and_then(|v| match v {
-            PropertyValue::String(s) => Some(s.clone()),
-            _ => None,
-        })?;
-
-        Some(Self {
-            id: node.id,
-            owner_id,
-            name,
-            created_at: node.created_at,
-        })
-    }
-}
+impl Mailbox {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Mail {
@@ -203,16 +158,6 @@ impl Agent {
             status: String::from("offline"),
             created_at: Utc::now(),
         }
-    }
-
-    pub fn with_id(mut self, id: impl Into<String>) -> Self {
-        self.id = id.into();
-        self
-    }
-
-    pub fn with_status(mut self, status: impl Into<String>) -> Self {
-        self.status = status.into();
-        self
     }
 
     pub fn to_node(&self) -> Node {

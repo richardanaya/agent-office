@@ -107,27 +107,6 @@ impl LuhmannId {
         Self { parts: new_parts }
     }
 
-    /// Insert between this ID and the next (e.g., between 1 and 2 → 1a)
-    pub fn insert_between(&self, next: &Self) -> Option<Self> {
-        // Can only insert if we're siblings (same parent)
-        if self.parent() != next.parent() {
-            return None;
-        }
-
-        // For simplicity, just add 'a' suffix to current
-        let mut new_parts = self.parts.clone();
-        match self.parts.last() {
-            Some(LuhmannPart::Number(_)) => {
-                new_parts.push(LuhmannPart::Letter('a'));
-            }
-            Some(LuhmannPart::Letter(_)) => {
-                new_parts.push(LuhmannPart::Number(1));
-            }
-            None => {}
-        }
-        Some(Self { parts: new_parts })
-    }
-
     /// Get the level/depth of this ID
     pub fn level(&self) -> usize {
         self.parts.len()
@@ -171,19 +150,6 @@ pub enum LinkType {
     References,
 }
 
-impl LinkType {
-    pub fn as_str(&self) -> &'static str {
-        "references"
-    }
-
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "references" => Some(LinkType::References),
-            _ => None,
-        }
-    }
-}
-
 /// A Zettelkasten-style atomic note
 /// The LuhmannId IS the note ID - no UUIDs
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -209,17 +175,6 @@ impl Note {
             created_at: now,
             updated_at: now,
         }
-    }
-
-    pub fn new_with_agent(
-        id: LuhmannId,
-        title: impl Into<String>,
-        content: impl Into<String>,
-        agent_id: impl Into<String>,
-    ) -> Self {
-        let mut note = Self::new(id, title, content);
-        note.agent_id = Some(agent_id.into());
-        note
     }
 
     pub fn to_node(&self) -> Node {
@@ -302,19 +257,6 @@ impl Note {
             created_at: node.created_at,
             updated_at: node.updated_at,
         })
-    }
-
-    pub fn add_tag(&mut self, tag: impl Into<String>) {
-        let tag = tag.into();
-        if !self.tags.contains(&tag) {
-            self.tags.push(tag);
-        }
-        self.updated_at = Utc::now();
-    }
-
-    pub fn remove_tag(&mut self, tag: &str) {
-        self.tags.retain(|t| t != tag);
-        self.updated_at = Utc::now();
     }
 }
 
@@ -401,15 +343,6 @@ impl NoteCounter {
         self.next_main_id += 1;
         id
     }
-}
-
-/// Graph path result for traversing the knowledge graph
-#[derive(Debug, Clone)]
-pub struct GraphPath {
-    pub start_note_id: NoteId,
-    pub end_note_id: NoteId,
-    pub path: Vec<(NoteId, LinkType)>,
-    pub distance: usize,
 }
 
 #[cfg(test)]

@@ -51,8 +51,6 @@ pub trait KnowledgeBaseService: Send + Sync {
     ) -> Result<Note>;
     
     async fn get_note(&self, note_id: &LuhmannId) -> Result<Note>;
-    async fn update_note(&self, note: &Note) -> Result<Note>;
-    async fn delete_note(&self, note_id: &LuhmannId) -> Result<()>;
     async fn list_notes(&self) -> Result<Vec<Note>>;
     async fn list_notes_by_prefix(&self, prefix: &LuhmannId) -> Result<Vec<Note>>;
     
@@ -89,14 +87,6 @@ pub struct NoteContext {
     pub backlinks: Vec<Note>,
     pub continues_to: Vec<Note>,
     pub continued_from: Vec<Note>,
-}
-
-/// Represents a subgraph of related notes
-#[derive(Debug, Clone)]
-pub struct NoteGraph {
-    pub center_note_id: NoteId,
-    pub notes: Vec<Note>,
-    pub links: Vec<NoteLink>,
 }
 
 /// Convert a LuhmannId to a NodeId for storage
@@ -277,25 +267,6 @@ impl<S: GraphStorage> KnowledgeBaseService for KnowledgeBaseServiceImpl<S> {
         
         Note::from_node(&node)
             .ok_or_else(|| KbError::NoteNotFound(note_id.clone()))
-    }
-
-    async fn update_note(&self, note: &Note) -> Result<Note> {
-        // Verify note exists
-        self.get_note(&note.id).await?;
-        
-        let node = note.to_node();
-        self.storage.update_node(&node).await?;
-        Ok(note.clone())
-    }
-
-    async fn delete_note(&self, note_id: &LuhmannId) -> Result<()> {
-        // Verify note exists
-        self.get_note(note_id).await?;
-        
-        let node_id = self.to_node_id(note_id);
-        // Delete the note (edges will be cascade deleted)
-        self.storage.delete_node(node_id).await?;
-        Ok(())
     }
 
     async fn list_notes(&self) -> Result<Vec<Note>> {
