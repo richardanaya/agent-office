@@ -46,9 +46,27 @@ agent-office mail watch my-agent --bash 'opencode run --agent my-agent "read you
 agent-office mail watch my-agent -i 30 --bash 'opencode run --agent my-agent "check inbox and respond to urgent messages"'
 ```
 
-**Agent Configuration:** Create your agent's system prompt at `~/.config/opencode/agent/my-agent.md` with full permissions:
+**Agent Configuration:** Create your agent at `~/.config/opencode/agents/my-agent.md` with full permissions using YAML front matter:
 
 ```markdown
+---
+description: Autonomous agent for Agent Office system
+mode: primary
+permission:
+  bash:
+    "*": allow
+  edit: allow
+  write: allow
+  read: allow
+  external_directory:
+    "/tmp/**": allow
+    "~/**": allow
+    "/home/$USER/**": allow
+  webfetch: allow
+  websearch: allow
+  task: allow
+---
+
 # Agent: my-agent
 
 You are an autonomous AI agent named "my-agent" working in the Agent Office system.
