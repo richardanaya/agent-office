@@ -39,6 +39,7 @@ fn create_router(database_url: Option<String>) -> Router {
     let db_url4 = Arc::new(database_url.clone());
     let db_url5 = Arc::new(database_url.clone());
     let db_url6 = Arc::new(database_url.clone());
+    let db_url7 = Arc::new(database_url.clone());
     
     Router::new()
         // Dashboard / Home
@@ -63,6 +64,12 @@ fn create_router(database_url: Option<String>) -> Router {
         .route("/agents/{agent_id}/status", post({
             let db = db_url3.clone();
             move |Path(agent_id): Path<String>| set_agent_status((*db).clone(), agent_id)
+        }))
+        
+        // Send mail to agent
+        .route("/mail/send", post({
+            let db = db_url7.clone();
+            move |body: axum::body::Bytes| send_mail((*db).clone(), body)
         }))
         
         // KB - Knowledge Base
@@ -161,12 +168,62 @@ async fn dashboard(database_url: Option<String>) -> Html<String> {
     }
     
     let content = format!(
-        r#"
+        r##"
+        <!-- Send Message Form -->
+        <div class="send-message-card">
+            <h3>Send Message to Agent</h3>
+            <form id="send-mail-form" 
+                  hx-post="/mail/send" 
+                  hx-target="#send-result"
+                  hx-swap="innerHTML"
+                  onsubmit="saveFormFields()">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="send-to">To (Agent ID)</label>
+                        <input type="text" id="send-to" name="to" placeholder="agent-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="send-from">From (Your ID)</label>
+                        <input type="text" id="send-from" name="from" placeholder="human">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="send-body">Message</label>
+                    <textarea id="send-body" name="body" rows="3" placeholder="Enter your message..." required></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Send Message</button>
+                    <span id="send-result"></span>
+                </div>
+            </form>
+        </div>
+        
+        <script>
+            // Load saved form fields from localStorage
+            function loadFormFields() {{
+                const savedTo = localStorage.getItem('send-mail-to');
+                const savedFrom = localStorage.getItem('send-mail-from');
+                if (savedTo) document.getElementById('send-to').value = savedTo;
+                if (savedFrom) document.getElementById('send-from').value = savedFrom;
+            }}
+            
+            // Save form fields to localStorage
+            function saveFormFields() {{
+                const to = document.getElementById('send-to').value;
+                const from = document.getElementById('send-from').value;
+                localStorage.setItem('send-mail-to', to);
+                localStorage.setItem('send-mail-from', from);
+            }}
+            
+            // Load on page load
+            document.addEventListener('DOMContentLoaded', loadFormFields);
+        </script>
+        
         <h2>Dashboard <span class="section-count">{} agents</span></h2>
         <div class="agent-list">
             {}
         </div>
-        "#,
+        "##,
         agents.len(),
         if agent_cards.is_empty() {
             "<p class='empty-state'>No agents registered yet</p>".to_string()
@@ -720,4 +777,86 @@ async fn inbox_view(database_url: Option<String>, agent_id: String) -> Html<Stri
     );
     
     Html(templates::wrap_content(content))
+}
+
+// Send mail to agent from human
+async fn send_mail(database_url: Option<String>, body: axum::body::Bytes) -> Html<String> {
+    // Parse form data from body
+    let body_str = String::from_utf8_lossy(&body);
+    let params: std::collections::HashMap<String, String> = body_str
+        .split('&')
+        .filter_map(|pair| {
+            let mut parts = pair.splitn(2, '=');
+            let key = parts.next()?.to_string();
+            let value = parts.next().unwrap_or("").to_string();
+            // Simple URL decode: replace + with space and %XX with actual character
+            let decoded = value.replace('+', " ")
+                .replace("%20", " ")
+                .replace("%21", "!")
+                .replace("%22", "\"")
+                .replace("%23", "#")
+                .replace("%24", "$")
+                .replace("%25", "%")
+                .replace("%26", "&")
+                .replace("%27", "'")
+                .replace("%28", "(")
+                .replace("%29", ")")
+                .replace("%2C", ",")
+                .replace("%2F", "/")
+                .replace("%3A", ":")
+                .replace("%3B", ";")
+                .replace("%3D", "=")
+                .replace("%3F", "?")
+                .replace("%40", "@")
+                .replace("%5B", "[")
+                .replace("%5D", "]");
+            Some((key, decoded))
+        })
+        .collect();
+    
+    let to_agent = params.get("to").cloned().unwrap_or_default();
+    let from_human = params.get("from").cloned().unwrap_or_default();
+    let body_text = params.get("body").cloned().unwrap_or_default();
+    
+    if to_agent.is_empty() || body_text.is_empty() {
+        return Html(format!(
+            r#"<div class="send-result error">Error: To and body are required</div>"#
+        ));
+    }
+    
+    let result = if let Some(url) = database_url {
+        let pool = match sqlx::postgres::PgPool::connect(&url).await {
+            Ok(p) => p,
+            Err(_) => return Html(templates::error_page("Failed to connect to database")),
+        };
+        let storage = PostgresStorage::new(pool);
+        let service = MailServiceImpl::new(storage);
+        
+        service.send_agent_to_agent(
+            from_human.clone(),
+            to_agent.clone(),
+            "Human Message",
+            body_text.clone(),
+        ).await
+    } else {
+        let storage = InMemoryStorage::new();
+        let service = MailServiceImpl::new(storage);
+        
+        service.send_agent_to_agent(
+            from_human.clone(),
+            to_agent.clone(),
+            "Human Message",
+            body_text.clone(),
+        ).await
+    };
+    
+    match result {
+        Ok(_) => Html(format!(
+            r#"<div class="send-result success">✓ Message sent to {}</div>"#,
+            to_agent
+        )),
+        Err(_) => Html(format!(
+            r#"<div class="send-result error">✗ Failed to send message</div>"#
+        )),
+    }
 }
