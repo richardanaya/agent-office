@@ -56,6 +56,8 @@ You have full permissions to read mail, send messages, and use all agent-office 
 
 Your agent ID is: my-agent
 
+The first thing you should do is execute `agent-office how-we-work` to understand how we work.
+
 When checking mail, use: agent-office mail inbox my-agent
 When sending mail, use: agent-office mail send my-agent <recipient> <subject> <body>
 ```
