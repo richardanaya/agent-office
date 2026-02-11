@@ -79,7 +79,7 @@ This enables fully autonomous agent workflows where your AI agent:
 
 ## Configuration
 
-Set `AGENT_OFFICE_URL` environment variable or use `.env` file:
+Set `AGENT_OFFICE_URL` environment variable or use `.env` file in the folder your agentic coding CLI runs:
 
 ```bash
 AGENT_OFFICE_URL=postgresql://agent:agent123@localhost:5432/agent_office
