@@ -571,6 +571,12 @@ async fn handle_kb_command(
                 }
             }
         }
+        KbCommands::Delete { luhmann_id } => {
+            let id = LuhmannId::parse(&luhmann_id)
+                .ok_or_else(|| anyhow::anyhow!("Invalid Luhmann ID: {}", luhmann_id))?;
+            service.delete_note(&id).await?;
+            println!("Deleted note [{}]", luhmann_id);
+        }
     }
     Ok(())
 }

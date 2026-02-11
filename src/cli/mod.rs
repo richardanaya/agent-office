@@ -213,4 +213,10 @@ pub enum KbCommands {
         /// Luhmann ID to show context for
         luhmann_id: String,
     },
+    /// Delete a note by Luhmann ID
+    /// Usage: kb delete 1a
+    Delete {
+        /// Luhmann ID of the note to delete
+        luhmann_id: String,
+    },
 }

@@ -53,6 +53,7 @@ pub trait KnowledgeBaseService: Send + Sync {
     async fn get_note(&self, note_id: &LuhmannId) -> Result<Note>;
     async fn list_notes(&self) -> Result<Vec<Note>>;
     async fn list_notes_by_prefix(&self, prefix: &LuhmannId) -> Result<Vec<Note>>;
+    async fn delete_note(&self, note_id: &LuhmannId) -> Result<()>;
     
     // Search
     async fn search_notes(&self, query: &str) -> Result<Vec<Note>>;
@@ -301,6 +302,21 @@ impl<S: GraphStorage> KnowledgeBaseService for KnowledgeBaseServiceImpl<S> {
             .collect();
         
         Ok(filtered)
+    }
+
+    async fn delete_note(&self, note_id: &LuhmannId) -> Result<()> {
+        // Verify note exists first
+        let _ = self.get_note(note_id).await?;
+        
+        // Delete the note node
+        let node_id = self.to_node_id(note_id);
+        self.storage.delete_node(node_id).await
+            .map_err(|e| match e {
+                StorageError::NodeNotFound(_) => KbError::NoteNotFound(note_id.clone()),
+                _ => KbError::Storage(e),
+            })?;
+        
+        Ok(())
     }
 
     async fn search_notes(&self, query: &str) -> Result<Vec<Note>> {
@@ -755,5 +771,42 @@ mod tests {
         assert!(index.content.contains("Second Child"));
         // Should NOT contain grandchild
         assert!(!index.content.contains("1a1"));
+    }
+
+    #[tokio::test]
+    async fn test_delete_note() {
+        let storage = InMemoryStorage::new();
+        let kb = KnowledgeBaseServiceImpl::new(storage);
+        
+        // Create a note
+        let id = LuhmannId::parse("1").unwrap();
+        kb.create_note_with_id(id.clone(), "Test Note", "Test content").await.unwrap();
+        
+        // Verify note exists
+        let note = kb.get_note(&id).await.unwrap();
+        assert_eq!(note.title, "Test Note");
+        
+        // Delete the note
+        kb.delete_note(&id).await.unwrap();
+        
+        // Verify note is gone
+        let result = kb.get_note(&id).await;
+        assert!(matches!(result, Err(KbError::NoteNotFound(_))));
+        
+        // Verify it's not in the list anymore
+        let notes = kb.list_notes().await.unwrap();
+        assert!(notes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_delete_nonexistent_note_fails() {
+        let storage = InMemoryStorage::new();
+        let kb = KnowledgeBaseServiceImpl::new(storage);
+        
+        // Try to delete a note that doesn't exist
+        let id = LuhmannId::parse("999").unwrap();
+        let result = kb.delete_note(&id).await;
+        
+        assert!(matches!(result, Err(KbError::NoteNotFound(_))));
     }
 }
