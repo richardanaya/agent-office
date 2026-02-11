@@ -1,3 +1,6 @@
+<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/33bbbd56-512c-4f9d-9d18-de5fb6dcfbe1" />
+
+
 # Agent Office
 
 A Rust-based multi-agent system featuring a mail system and Zettelkasten-style knowledge base with Markdown support.
