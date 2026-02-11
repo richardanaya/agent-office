@@ -40,6 +40,7 @@ fn create_router(database_url: Option<String>) -> Router {
     let db_url5 = Arc::new(database_url.clone());
     let db_url6 = Arc::new(database_url.clone());
     let db_url7 = Arc::new(database_url.clone());
+    let db_url8 = Arc::new(database_url.clone());
     
     Router::new()
         // Dashboard / Home
@@ -58,6 +59,12 @@ fn create_router(database_url: Option<String>) -> Router {
         .route("/mail/inbox/{agent_id}", get({
             let db = db_url2.clone();
             move |Path(agent_id): Path<String>| inbox_view((*db).clone(), agent_id)
+        }))
+        
+        // Outbox view
+        .route("/mail/outbox/{agent_id}", get({
+            let db = db_url8.clone();
+            move |Path(agent_id): Path<String>| outbox_view((*db).clone(), agent_id)
         }))
         
         // Update agent status
@@ -128,12 +135,13 @@ async fn dashboard(database_url: Option<String>) -> Html<String> {
             _ => "offline",
         };
         
-        // For now, just show inbox link (agents auto-create inbox)
+        // Show inbox and outbox links
         let mailbox_list = format!(
             r#"<div class="mailbox-item">
-                <a href="/mail/inbox/{}" class="btn btn-sm">📧 Inbox</a>
+                <a href="/mail/inbox/{}" class="btn btn-sm">📥 Inbox</a>
+                <a href="/mail/outbox/{}" class="btn btn-sm">📤 Outbox</a>
             </div>"#,
-            agent.id
+            agent.id, agent.id
         );
         
         // Quick status toggle button (only show if not already offline)
@@ -186,6 +194,10 @@ async fn dashboard(database_url: Option<String>) -> Html<String> {
                         <label for="send-from">From (Your ID)</label>
                         <input type="text" id="send-from" name="from" placeholder="human">
                     </div>
+                </div>
+                <div class="form-group">
+                    <label for="send-subject">Subject</label>
+                    <input type="text" id="send-subject" name="subject" placeholder="Message subject (optional)">
                 </div>
                 <div class="form-group">
                     <label for="send-body">Message</label>
@@ -779,6 +791,91 @@ async fn inbox_view(database_url: Option<String>, agent_id: String) -> Html<Stri
     Html(templates::wrap_content(content))
 }
 
+// Outbox view - Show sent messages for an agent
+async fn outbox_view(database_url: Option<String>, agent_id: String) -> Html<String> {
+    let (outbox_mail, agent_name) = if let Some(url) = database_url {
+        let pool = match sqlx::postgres::PgPool::connect(&url).await {
+            Ok(p) => p,
+            Err(_) => return Html(templates::error_page("Failed to connect to database")),
+        };
+        let storage = PostgresStorage::new(pool);
+        let service = MailServiceImpl::new(storage);
+        
+        let agent = match service.get_agent(agent_id.clone()).await {
+            Ok(a) => a,
+            Err(_) => return Html(templates::error_page(&format!("Agent '{}' not found", agent_id))),
+        };
+        
+        let mailbox = match service.get_agent_mailbox(agent_id.clone()).await {
+            Ok(m) => m,
+            Err(_) => return Html(templates::error_page("Failed to get mailbox")),
+        };
+        
+        let mail = match service.get_mailbox_outbox(mailbox.id).await {
+            Ok(m) => m,
+            Err(_) => vec![],
+        };
+        
+        (mail, agent.name)
+    } else {
+        let storage = InMemoryStorage::new();
+        let service = MailServiceImpl::new(storage);
+        
+        let agent = match service.get_agent(agent_id.clone()).await {
+            Ok(a) => a,
+            Err(_) => return Html(templates::error_page(&format!("Agent '{}' not found", agent_id))),
+        };
+        
+        let mailbox = match service.get_agent_mailbox(agent_id.clone()).await {
+            Ok(m) => m,
+            Err(_) => return Html(templates::error_page("Failed to get mailbox")),
+        };
+        
+        let mail = match service.get_mailbox_outbox(mailbox.id).await {
+            Ok(m) => m,
+            Err(_) => vec![],
+        };
+        
+        (mail, agent.name)
+    };
+    
+    let mail_html = outbox_mail.iter()
+        .map(|m| {
+            format!(
+                r#"<div class="mail-card sent">
+                    <div class="mail-header">
+                        <span class="mail-subject">{}</span>
+                        <span class="mail-meta">To: {} • {}</span>
+                    </div>
+                    <div class="mail-body">{}</div>
+                </div>"#,
+                m.subject, m.to_mailbox_id, m.created_at.format("%Y-%m-%d %H:%M"), m.body
+            )
+        })
+        .collect::<String>();
+    
+    let content = format!(
+        r#"
+        <div class="back-link">
+            <a href="/" class="btn btn-secondary btn-sm">&larr; Back to Dashboard</a>
+        </div>
+        <h2>Outbox: {} <span class="section-count">{} messages</span></h2>
+        <div class="mail-list">
+            {}
+        </div>
+        "#,
+        agent_name,
+        outbox_mail.len(),
+        if mail_html.is_empty() {
+            "<p class='empty-state'>No sent messages</p>".to_string()
+        } else {
+            mail_html
+        }
+    );
+    
+    Html(templates::wrap_content(content))
+}
+
 // Send mail to agent from human
 async fn send_mail(database_url: Option<String>, body: axum::body::Bytes) -> Html<String> {
     // Parse form data from body
@@ -816,6 +913,7 @@ async fn send_mail(database_url: Option<String>, body: axum::body::Bytes) -> Htm
     
     let to_agent = params.get("to").cloned().unwrap_or_default();
     let from_human = params.get("from").cloned().unwrap_or_default();
+    let subject = params.get("subject").cloned().unwrap_or_default();
     let body_text = params.get("body").cloned().unwrap_or_default();
     
     if to_agent.is_empty() || body_text.is_empty() {
@@ -824,6 +922,13 @@ async fn send_mail(database_url: Option<String>, body: axum::body::Bytes) -> Htm
         ));
     }
     
+    // Use provided subject or default to "Message from {sender}"
+    let subject = if subject.is_empty() {
+        format!("Message from {}", from_human)
+    } else {
+        subject
+    };
+    
     let result = if let Some(url) = database_url {
         let pool = match sqlx::postgres::PgPool::connect(&url).await {
             Ok(p) => p,
@@ -831,8 +936,6 @@ async fn send_mail(database_url: Option<String>, body: axum::body::Bytes) -> Htm
         };
         let storage = PostgresStorage::new(pool);
         let service = MailServiceImpl::new(storage);
-        
-        let subject = format!("Message from {}", from_human);
         
         service.send_agent_to_agent(
             from_human.clone(),
@@ -843,8 +946,6 @@ async fn send_mail(database_url: Option<String>, body: axum::body::Bytes) -> Htm
     } else {
         let storage = InMemoryStorage::new();
         let service = MailServiceImpl::new(storage);
-        
-        let subject = format!("Message from {}", from_human);
         
         service.send_agent_to_agent(
             from_human.clone(),
