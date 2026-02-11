@@ -331,13 +331,17 @@ async fn handle_agent_command(
     cmd: AgentCommands,
 ) -> anyhow::Result<()> {
     match cmd {
-        AgentCommands::Create { name } => {
+        AgentCommands::Register { name } => {
             let agent = service.create_agent(name.clone()).await?;
             if agent.id != name {
-                println!("Created agent: {} (ID: {})", name, agent.id);
+                println!("Registered agent: {} (ID: {})", name, agent.id);
             } else {
-                println!("Created agent: {}", name);
+                println!("Registered agent: {}", name);
             }
+        }
+        AgentCommands::Unregister { agent_id } => {
+            service.delete_agent(agent_id.clone()).await?;
+            println!("Unregistered agent: {} (and cleared their mail)", agent_id);
         }
         AgentCommands::List => {
             let agents = service.list_agents().await?;

@@ -30,6 +30,7 @@ pub type Result<T> = std::result::Result<T, MailError>;
 pub trait MailService: Send + Sync {
     // Agent operations
     async fn create_agent(&self, name: impl Into<String> + Send) -> Result<Agent>;
+    async fn delete_agent(&self, agent_id: AgentId) -> Result<()>;
     async fn get_agent(&self, id: AgentId) -> Result<Agent>;
     async fn list_agents(&self) -> Result<Vec<Agent>>;
     async fn set_agent_status(&self, agent_id: AgentId, status: impl Into<String> + Send) -> Result<Agent>;
@@ -97,6 +98,26 @@ impl<S: GraphStorage> MailService for MailServiceImpl<S> {
         self.storage.create_node(&node).await?;
         
         Ok(agent)
+    }
+
+    async fn delete_agent(&self, agent_id: AgentId) -> Result<()> {
+        // First, get the agent to ensure they exist
+        let agent = self.get_agent(agent_id.clone()).await?;
+        let agent_node_id = string_to_node_id(&agent.id);
+        
+        // Get all mail in inbox and outbox to clear them
+        let inbox = self.get_mailbox_inbox(agent_node_id).await?;
+        let outbox = self.get_mailbox_outbox(agent_node_id).await?;
+        
+        // Delete all mail nodes
+        for mail in inbox.iter().chain(outbox.iter()) {
+            let _ = self.storage.delete_node(mail.id).await;
+        }
+        
+        // Finally, delete the agent node
+        self.storage.delete_node(agent_node_id).await?;
+        
+        Ok(())
     }
 
     async fn get_agent(&self, id: AgentId) -> Result<Agent> {

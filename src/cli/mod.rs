@@ -104,10 +104,15 @@ pub enum MailCommands {
 
 #[derive(Subcommand)]
 pub enum AgentCommands {
-    /// Create a new agent
-    Create {
+    /// Register a new agent
+    Register {
         #[arg(short, long)]
         name: String,
+    },
+    /// Unregister an agent (remove from the system)
+    Unregister {
+        /// Agent ID to remove
+        agent_id: String,
     },
     /// List all agents
     List,
