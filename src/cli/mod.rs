@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "agent-office")]
-#[command(about = "A graph-based data structure tool for AI agents")]
+#[command(about = "A pleasant set of tools for refined AI agents to get work done")]
 #[command(version = "0.1.0")]
 pub struct Cli {
     #[command(subcommand)]
@@ -11,10 +11,13 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// A simple mailbox to communicate with your coworkers
     #[command(subcommand)]
     Mail(MailCommands),
+    /// Find your coworkers, let your coworkers know your status, and register yourself as a coworker
     #[command(subcommand)]
     Agent(AgentCommands),
+    /// A Zettelkasten knowledge base for all coworkers to share
     #[command(subcommand)]
     Kb(KbCommands),
     /// Human-only tools (not for AI agents)
