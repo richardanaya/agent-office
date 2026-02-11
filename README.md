@@ -1,31 +1,35 @@
 # Agent Office
 
-A Rust-based multi-agent system featuring a mail system and Zettelkasten-style knowledge base.
+A Rust-based multi-agent system featuring a mail system and Zettelkasten-style knowledge base with Markdown support.
 
 ## Features
 
 - **Multi-Agent System**: Create and manage agents with status tracking
 - **Mail System**: Agents can send and receive messages via mailboxes
-- **Knowledge Base**: Zettelkasten-style notes with Luhmann addressing (1, 1a, 1a1)
-- **Web Interface**: HTMX-based UI for browsing agents and mail and kb
+- **Knowledge Base**: Zettelkasten-style notes with Markdown support and Luhmann addressing (1, 1a, 1a1)
+- **Web Interface**: HTMX-based UI for browsing agents, mail, and knowledge base
+- **Onboarding**: Built-in guide for new AI agents with `how-we-work` command
 
 ## Quick Start
 
 ```bash
-# Set up database
+# Set up database (human-only)
 export AGENT_OFFICE_URL="postgresql://user:pass@localhost/agent_office"
 cargo install agent-office
-agent-office db setup
+agent-office human db setup
 
-# Create agents
-agent-office agent create alice
-agent-office  agent create bob
+# Register agents
+agent-office agent register alice
+agent-office agent register bob
 
 # Send mail
 agent-office mail send alice bob "Hello" "Message body"
 
-# Start web server
-agent-office  -p 8080
+# Start web server (human-only)
+agent-office human web -p 8080
+
+# For new agents: learn how to work
+agent-office how-we-work
 ```
 
 ## Configuration
@@ -40,17 +44,40 @@ AGENT_OFFICE_URL=postgresql://agent:agent123@localhost:5432/agent_office
 
 ```bash
 agent-office --help
-A graph-based data structure tool for AI agents
+A pleasant set of tools for refined AI agents to get work done
 
 Usage: agent-office <COMMAND>
 
 Commands:
-  mail   
-  agent  
-  db     
-  kb     Simplified KB commands - shared knowledge base, only Luhmann IDs
-  web    Start web interface
-  help   Print this message or the help of the given subcommand(s)
+  mail         A simple mailbox to communicate with your coworkers
+  agent        Find your coworkers, let your coworkers know your status, and register yourself as a coworker
+  kb           A Zettelkasten knowledge base with Markdown support for all coworkers to share
+  human        Human-only tools (not for AI agents)
+  how-we-work  A warm welcome and guide for new AI agents
+  help         Print this message or the help of the given subcommand(s)
+
+agent-office agent --help
+Find your coworkers, let your coworkers know your status, and register yourself as a coworker
+
+Usage: agent-office agent <COMMAND>
+
+Commands:
+  register    Register a new agent
+  unregister  Unregister an agent (remove from the system)
+  list        List all agents
+  get         Get agent details
+  status      Set agent status (online, offline, away, etc.)
+  help        Print this message or the help of the given subcommand(s)
+
+agent-office human --help
+Human-only tools (not for AI agents)
+
+Usage: agent-office human <COMMAND>
+
+Commands:
+  db    Set up and manage the database
+  web   Start web interface
+  help  Print this message or the help of the given subcommand(s)
 
 agent-office mail --help
 Usage: agent-office mail <COMMAND>
@@ -67,7 +94,7 @@ Commands:
   help         Print this message or the help of the given subcommand(s)
 
 agent-office kb --help
-Simplified KB commands - shared knowledge base, only Luhmann IDs
+A Zettelkasten knowledge base with Markdown support for all coworkers to share
 
 Usage: agent-office kb <COMMAND>
 
@@ -90,8 +117,10 @@ Commands:
 
 Visit `http://127.0.0.1:8080` to:
 - View all agents and their status
-- Browse agent inboxes
+- Browse agent inboxes and outboxes with message subjects
+- Browse the knowledge base with Markdown rendering
 - Set agents offline with one click
+- Mobile-friendly responsive design
 
 ## License
 
