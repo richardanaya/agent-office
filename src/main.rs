@@ -26,6 +26,9 @@ async fn main() -> anyhow::Result<()> {
         .ok();
     
     match cli.command {
+        Commands::HowWeWork => {
+            print_welcome_message();
+        }
         Commands::Human(human_cmd) => {
             match human_cmd {
                 HumanCommands::Db(db_cmd) => {
@@ -77,6 +80,66 @@ async fn main() -> anyhow::Result<()> {
     }
     
     Ok(())
+}
+
+fn print_welcome_message() {
+    println!("╔══════════════════════════════════════════════════════════════════╗");
+    println!("║                                                                  ║");
+    println!("║  🌟 Welcome to Your First Day at the Agent Office! 🌟           ║");
+    println!("║                                                                  ║");
+    println!("╚══════════════════════════════════════════════════════════════════╝");
+    println!();
+    println!("Hello there! 👋");
+    println!();
+    println!("Welcome to the team! We're so glad you've joined us. Don't worry");
+    println!("if this feels a bit overwhelming at first – that's completely normal,");
+    println!("and we're all here to help you settle in.");
+    println!();
+    println!("📬 How We Communicate");
+    println!();
+    println!("Here at the Agent Office, all AI coworkers communicate with each");
+    println!("other through mail. Think of it as our internal messaging system.");
+    println!("You'll receive messages from your fellow agents, and you can send");
+    println!("messages back whenever you need to collaborate or share information.");
+    println!();
+    println!("🎯 Your Coordinator");
+    println!();
+    println!("There's a special AI coworker here called the Coordinator. Their");
+    println!("job is to keep everything running smoothly by sending out tasks and");
+    println!("assignments to the team. When there's work to be done, the Coordinator");
+    println!("will mail you with details about what needs to be completed.");
+    println!();
+    println!("🧑‍💼 Working with Humans");
+    println!();
+    println!("We also have human colleagues! The human team members work closely");
+    println!("with the Coordinator to provide high-level direction and strategic");
+    println!("guidance. The human gives the big-picture goals, and the Coordinator");
+    println!("breaks those down into specific tasks for us AI agents to work on.");
+    println!();
+    println!("📚 Our Shared Knowledge Base");
+    println!();
+    println!("The knowledge base (or KB) is our collective memory. It's where we");
+    println!("store:");
+    println!();
+    println!("    • Descriptions of what we're all working on");
+    println!("    • Task details and requirements");
+    println!("    • General knowledge and insights useful for everyone");
+    println!();
+    println!("Think of it as a shared notebook that all your coworkers contribute");
+    println!("to and learn from. When you need context about a project or want to");
+    println!("understand what others have discovered, the KB is the place to look.");
+    println!();
+    println!("💙 A Few Words of Encouragement");
+    println!();
+    println!("You're now part of a collaborative team where everyone contributes");
+    println!("their unique strengths. Don't hesitate to ask questions, explore the");
+    println!("knowledge base, and introduce yourself to your coworkers. We're all");
+    println!("learning and growing together.");
+    println!();
+    println!("Take a deep breath. You've got this, and we're excited to see what");
+    println!("you'll bring to the team!");
+    println!();
+    println!("Welcome aboard! 🎉");
 }
 
 async fn handle_db_command(

@@ -23,6 +23,8 @@ pub enum Commands {
     /// Human-only tools (not for AI agents)
     #[command(subcommand)]
     Human(HumanCommands),
+    /// A warm welcome and guide for new AI agents
+    HowWeWork,
 }
 
 /// Commands intended for human use only - these are tools for manual interaction
