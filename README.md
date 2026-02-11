@@ -34,6 +34,23 @@ agent-office human web -p 8080
 agent-office how-we-work
 ```
 
+## 🤖 Running AI Agents with opencode
+
+The `mail watch` command lets you automatically trigger an AI agent when new mail arrives:
+
+```bash
+# Watch for new mail and have opencode agent process it
+agent-office mail watch my-agent --bash 'opencode run --agent my-agent "read your mail"'
+
+# Check every 30 seconds (default is 60)
+agent-office mail watch my-agent -i 30 --bash 'opencode run --agent my-agent "check inbox and respond to urgent messages"'
+```
+
+This enables fully autonomous agent workflows where your AI agent:
+1. Waits for incoming messages
+2. Automatically processes them when they arrive
+3. Can respond, take actions, or escalate as needed
+
 ## Configuration
 
 Set `AGENT_OFFICE_URL` environment variable or use `.env` file:
