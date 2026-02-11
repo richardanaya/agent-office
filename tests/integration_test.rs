@@ -8,8 +8,8 @@ async fn test_full_mail_workflow() {
     let service = MailServiceImpl::new(storage);
     
     // Create two agents (each auto-creates a single mailbox)
-    let alice = service.create_agent("Alice").await.unwrap();
-    let bob = service.create_agent("Bob").await.unwrap();
+    let alice = service.create_agent("alice").await.unwrap();
+    let bob = service.create_agent("bob").await.unwrap();
     let alice_id = alice.id.clone();
     let bob_id = bob.id.clone();
     println!("Created agents: Alice ({}), Bob ({})", alice_id, bob_id);

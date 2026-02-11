@@ -22,6 +22,9 @@ pub enum MailError {
     
     #[error("Invalid operation: {0}")]
     InvalidOperation(String),
+    
+    #[error("Invalid agent name: {0}")]
+    InvalidAgentName(String),
 }
 
 pub type Result<T> = std::result::Result<T, MailError>;
@@ -93,6 +96,15 @@ impl<S: GraphStorage> MailServiceImpl<S> {
 #[async_trait]
 impl<S: GraphStorage> MailService for MailServiceImpl<S> {
     async fn create_agent(&self, name: impl Into<String> + Send) -> Result<Agent> {
+        let name = name.into();
+        
+        // Validate agent name: must be lowercase with no spaces
+        if name.chars().any(|c| c.is_uppercase() || c.is_whitespace()) {
+            return Err(MailError::InvalidAgentName(
+                format!("Agent name '{}' is invalid. Names must be lowercase with no spaces (e.g., 'my_agent', 'agent123').", name)
+            ));
+        }
+        
         let agent = Agent::new(name);
         let node = agent.to_node();
         self.storage.create_node(&node).await?;
@@ -348,8 +360,26 @@ mod tests {
         let storage = InMemoryStorage::new();
         let service = MailServiceImpl::new(storage);
         
-        let agent = service.create_agent("Test Agent").await.unwrap();
-        assert_eq!(agent.name, "Test Agent");
+        let agent = service.create_agent("test_agent").await.unwrap();
+        assert_eq!(agent.name, "test_agent");
+    }
+
+    #[tokio::test]
+    async fn test_create_agent_uppercase_fails() {
+        let storage = InMemoryStorage::new();
+        let service = MailServiceImpl::new(storage);
+        
+        let result = service.create_agent("TestAgent").await;
+        assert!(matches!(result, Err(MailError::InvalidAgentName(_))));
+    }
+
+    #[tokio::test]
+    async fn test_create_agent_spaces_fails() {
+        let storage = InMemoryStorage::new();
+        let service = MailServiceImpl::new(storage);
+        
+        let result = service.create_agent("test agent").await;
+        assert!(matches!(result, Err(MailError::InvalidAgentName(_))));
     }
 
     #[tokio::test]
@@ -357,7 +387,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         let service = MailServiceImpl::new(storage);
         
-        let agent = service.create_agent("Agent").await.unwrap();
+        let agent = service.create_agent("agent").await.unwrap();
         
         // Should be able to get the mailbox for the agent
         let mailbox = service.get_agent_mailbox(agent.id.clone()).await.unwrap();
@@ -374,8 +404,8 @@ mod tests {
         let service = MailServiceImpl::new(storage);
         
         // Create two agents - mailboxes are auto-created
-        let agent1 = service.create_agent("Sender").await.unwrap();
-        let agent2 = service.create_agent("Receiver").await.unwrap();
+        let agent1 = service.create_agent("sender").await.unwrap();
+        let agent2 = service.create_agent("receiver").await.unwrap();
         
         // Send mail directly between agents
         let mail = service
@@ -408,8 +438,8 @@ mod tests {
         let storage = InMemoryStorage::new();
         let service = MailServiceImpl::new(storage);
         
-        let agent1 = service.create_agent("Sender").await.unwrap();
-        let agent2 = service.create_agent("Receiver").await.unwrap();
+        let agent1 = service.create_agent("sender").await.unwrap();
+        let agent2 = service.create_agent("receiver").await.unwrap();
         
         let mail = service
             .send_agent_to_agent(agent1.id, agent2.id, "Test", "Body")
@@ -427,8 +457,8 @@ mod tests {
         let storage = InMemoryStorage::new();
         let service = MailServiceImpl::new(storage);
         
-        let agent1 = service.create_agent("Sender").await.unwrap();
-        let agent2 = service.create_agent("Receiver").await.unwrap();
+        let agent1 = service.create_agent("sender").await.unwrap();
+        let agent2 = service.create_agent("receiver").await.unwrap();
         
         // Initially no unread mail
         let (has_unread, unread) = service.check_unread_mail(agent2.id.clone()).await.unwrap();
@@ -458,8 +488,8 @@ mod tests {
         let storage = InMemoryStorage::new();
         let service = MailServiceImpl::new(storage);
         
-        let agent1 = service.create_agent("Sender").await.unwrap();
-        let agent2 = service.create_agent("Receiver").await.unwrap();
+        let agent1 = service.create_agent("sender").await.unwrap();
+        let agent2 = service.create_agent("receiver").await.unwrap();
         
         // Send some mail
         service.send_agent_to_agent(agent1.id.clone(), agent2.id.clone(), "Recent", "Body").await.unwrap();
@@ -491,7 +521,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         let service = MailServiceImpl::new(storage);
         
-        let agent = service.create_agent("Test Agent").await.unwrap();
+        let agent = service.create_agent("test_agent").await.unwrap();
         let mailbox = service.get_agent_mailbox(agent.id.clone()).await.unwrap();
         
         // Get agent by mailbox
@@ -506,9 +536,9 @@ mod tests {
         let service = MailServiceImpl::new(storage);
         
         // Create multiple agents
-        service.create_agent("Agent 1").await.unwrap();
-        service.create_agent("Agent 2").await.unwrap();
-        service.create_agent("Agent 3").await.unwrap();
+        service.create_agent("agent_1").await.unwrap();
+        service.create_agent("agent_2").await.unwrap();
+        service.create_agent("agent_3").await.unwrap();
         
         let agents = service.list_agents().await.unwrap();
         assert_eq!(agents.len(), 3);
@@ -519,7 +549,7 @@ mod tests {
         let storage = InMemoryStorage::new();
         let service = MailServiceImpl::new(storage);
         
-        let agent = service.create_agent("Test Agent").await.unwrap();
+        let agent = service.create_agent("test_agent").await.unwrap();
         assert_eq!(agent.status, "offline");
         
         let updated = service.set_agent_status(agent.id.clone(), "online").await.unwrap();
@@ -535,8 +565,8 @@ mod tests {
         let storage = InMemoryStorage::new();
         let service = MailServiceImpl::new(storage);
         
-        let agent1 = service.create_agent("Sender").await.unwrap();
-        let agent2 = service.create_agent("Receiver").await.unwrap();
+        let agent1 = service.create_agent("sender").await.unwrap();
+        let agent2 = service.create_agent("receiver").await.unwrap();
         
         // Send multiple mails
         service.send_agent_to_agent(agent1.id.clone(), agent2.id.clone(), "First", "Body1").await.unwrap();
