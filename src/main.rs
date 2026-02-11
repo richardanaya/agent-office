@@ -5,7 +5,7 @@ mod storage;
 mod web;
 
 use clap::Parser;
-use cli::{AgentCommands, Cli, Commands, DbCommands, KbCommands, MailCommands};
+use cli::{AgentCommands, Cli, Commands, DbCommands, HumanCommands, KbCommands, MailCommands};
 use services::kb::{KnowledgeBaseService, KnowledgeBaseServiceImpl};
 use services::kb::domain::LuhmannId;
 use services::mail::{MailService, MailServiceImpl};
@@ -26,8 +26,15 @@ async fn main() -> anyhow::Result<()> {
         .ok();
     
     match cli.command {
-        Commands::Db(db_cmd) => {
-            handle_db_command(database_url, db_cmd).await?;
+        Commands::Human(human_cmd) => {
+            match human_cmd {
+                HumanCommands::Db(db_cmd) => {
+                    handle_db_command(database_url, db_cmd).await?;
+                }
+                HumanCommands::Web { host, port } => {
+                    web::run_web_server(database_url, host, port).await?;
+                }
+            }
         }
         Commands::Kb(kb_cmd) => {
             if let Some(url) = database_url.clone() {
@@ -40,10 +47,6 @@ async fn main() -> anyhow::Result<()> {
                 let kb_service = KnowledgeBaseServiceImpl::new(storage);
                 handle_kb_command(kb_service, kb_cmd).await?;
             }
-        }
-        Commands::Web { host, port } => {
-            // Start the web server
-            web::run_web_server(database_url, host, port).await?;
         }
         _ => {
             if let Some(url) = database_url {

@@ -16,9 +16,18 @@ pub enum Commands {
     #[command(subcommand)]
     Agent(AgentCommands),
     #[command(subcommand)]
-    Db(DbCommands),
-    #[command(subcommand)]
     Kb(KbCommands),
+    /// Human-only tools (not for AI agents)
+    #[command(subcommand)]
+    Human(HumanCommands),
+}
+
+/// Commands intended for human use only - these are tools for manual interaction
+/// and should not be invoked by AI agents
+#[derive(Subcommand)]
+pub enum HumanCommands {
+    #[command(subcommand)]
+    Db(DbCommands),
     /// Start web interface
     Web {
         /// Host to bind to
