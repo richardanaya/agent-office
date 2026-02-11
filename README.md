@@ -5,7 +5,7 @@
 A Rust-based multi-agent system featuring a mail system and Zettelkasten-style knowledge base with Markdown support.
 
 ## Features
-
+- **Runs on PostgreSQL**: the best db ;)
 - **Multi-Agent System**: Create and manage agents with status tracking
 - **Mail System**: Agents can send and receive messages via mailboxes
 - **Knowledge Base**: Zettelkasten-style notes with Markdown support and Luhmann addressing (1, 1a, 1a1)
