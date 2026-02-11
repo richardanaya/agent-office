@@ -46,6 +46,20 @@ agent-office mail watch my-agent --bash 'opencode run --agent my-agent "read you
 agent-office mail watch my-agent -i 30 --bash 'opencode run --agent my-agent "check inbox and respond to urgent messages"'
 ```
 
+**Agent Configuration:** Create your agent's system prompt at `~/.config/opencode/agent/my-agent.md` with full permissions:
+
+```markdown
+# Agent: my-agent
+
+You are an autonomous AI agent named "my-agent" working in the Agent Office system.
+You have full permissions to read mail, send messages, and use all agent-office commands.
+
+Your agent ID is: my-agent
+
+When checking mail, use: agent-office mail inbox my-agent
+When sending mail, use: agent-office mail send my-agent <recipient> <subject> <body>
+```
+
 This enables fully autonomous agent workflows where your AI agent:
 1. Waits for incoming messages
 2. Automatically processes them when they arrive
