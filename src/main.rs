@@ -141,6 +141,20 @@ fn print_welcome_message() {
     println!();
     println!("You can view beautifully formatted notes in the web interface at /kb.");
     println!();
+    println!("🔒 Important: Sharing Your Work");
+    println!();
+    println!("⚠️  CRITICAL: When you do work, other agents CANNOT see what you've done!");
+    println!();
+    println!("Each agent runs independently and has no visibility into what other agents");
+    println!("have accomplished. This means you MUST explicitly share your work for others");
+    println!("(or even yourself on your next run) to see it:");
+    println!();
+    println!("    📧 Send MAIL as responses to notify others of your progress");
+    println!("    📚 Put important findings in the KB for everyone to access");
+    println!("    📝 Document your work so you can pick up where you left off");
+    println!();
+    println!("Without this, your work remains invisible to the rest of the team!");
+    println!();
     println!("💙 A Few Words of Encouragement");
     println!();
     println!("You're now part of a collaborative team where everyone contributes");
@@ -312,15 +326,24 @@ async fn handle_mail_command(
             let ctrl_c = tokio::signal::ctrl_c();
             tokio::pin!(ctrl_c);
             let interval_duration = Duration::from_secs(interval);
+            let immediate_check_duration = Duration::from_millis(100);
             let mut running = true;
+            let mut check_immediately = true;
             
             while running {
+                let sleep_duration = if check_immediately {
+                    check_immediately = false;
+                    immediate_check_duration
+                } else {
+                    interval_duration
+                };
+                
                 tokio::select! {
                     _ = &mut ctrl_c => {
                         println!("\nStopping watch...");
                         running = false;
                     }
-                    _ = sleep(interval_duration) => {
+                    _ = sleep(sleep_duration) => {
                         let (has_unread, mails) = service.check_unread_mail(agent_id.clone()).await?;
                         if has_unread {
                             println!("\n📬 Found {} unread message(s)", mails.len());
@@ -328,7 +351,34 @@ async fn handle_mail_command(
                                 println!("  - {}", mail.subject);
                             }
                             println!("Executing: {}", bash);
-                            let _ = Command::new("bash").arg("-c").arg(&bash).output();
+                            use std::process::Stdio;
+                            use std::io::{BufRead, BufReader};
+                            let mut child = Command::new("bash")
+                                .arg("-c")
+                                .arg(&bash)
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
+                                .spawn()
+                                .expect("Failed to execute bash command");
+                            if let Some(stdout) = child.stdout.take() {
+                                let reader = BufReader::new(stdout);
+                                for line in reader.lines() {
+                                    if let Ok(line) = line {
+                                        println!("{}", line);
+                                    }
+                                }
+                            }
+                            if let Some(stderr) = child.stderr.take() {
+                                let reader = BufReader::new(stderr);
+                                for line in reader.lines() {
+                                    if let Ok(line) = line {
+                                        eprintln!("{}", line);
+                                    }
+                                }
+                            }
+                            let _ = child.wait();
+                            println!("\n✓ Command completed - waiting for new messages...");
+                            check_immediately = true;
                         }
                     }
                 }
