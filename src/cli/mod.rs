@@ -17,7 +17,7 @@ pub enum Commands {
     /// Find your coworkers, let your coworkers know your status, and register yourself as a coworker
     #[command(subcommand)]
     Agent(AgentCommands),
-    /// A Zettelkasten knowledge base for all coworkers to share
+    /// A Zettelkasten knowledge base with Markdown support for all coworkers to share
     #[command(subcommand)]
     Kb(KbCommands),
     /// Human-only tools (not for AI agents)

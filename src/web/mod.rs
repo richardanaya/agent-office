@@ -13,6 +13,53 @@ use crate::services::kb::{KnowledgeBaseService, KnowledgeBaseServiceImpl};
 use crate::services::kb::domain::LuhmannId;
 use crate::storage::{memory::InMemoryStorage, postgres::PostgresStorage};
 
+/// Render markdown content to HTML using pulldown-cmark.
+fn render_markdown(content: &str) -> String {
+    use pulldown_cmark::{Parser, Options, html};
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_TASKLISTS);
+    let parser = Parser::new_ext(content, options);
+    let mut html_output = String::new();
+    html::push_html(&mut html_output, parser);
+    html_output
+}
+
+/// Strip markdown formatting to produce a plain-text preview, truncated at
+/// a word boundary near `max_chars`.
+fn plain_text_preview(content: &str, max_chars: usize) -> String {
+    use pulldown_cmark::{Parser, Event, Tag, TagEnd};
+    let parser = Parser::new(content);
+    let mut text = String::new();
+    for event in parser {
+        match event {
+            Event::Text(t) | Event::Code(t) => text.push_str(&t),
+            Event::SoftBreak | Event::HardBreak => text.push(' '),
+            Event::Start(Tag::Paragraph) => {
+                if !text.is_empty() {
+                    text.push(' ');
+                }
+            }
+            Event::End(TagEnd::Paragraph) => text.push(' '),
+            _ => {}
+        }
+        if text.len() > max_chars + 50 {
+            break; // we have enough
+        }
+    }
+    // Truncate at word boundary
+    let trimmed = text.trim();
+    if trimmed.len() <= max_chars {
+        return trimmed.to_string();
+    }
+    // Find the last space before max_chars
+    match trimmed[..max_chars].rfind(' ') {
+        Some(pos) => format!("{}...", &trimmed[..pos]),
+        None => format!("{}...", &trimmed[..max_chars]),
+    }
+}
+
 pub async fn run_web_server(
     database_url: Option<String>,
     host: String,
@@ -340,40 +387,65 @@ async fn kb_list_notes(database_url: Option<String>) -> Html<String> {
     
     let mut notes_html = String::new();
     for note in &notes {
+        let depth = note.id.level().saturating_sub(1); // 0 for root notes
+        let indent_px = depth * 24; // indent per level
+
+        // Build tags HTML
+        let tags_html = if note.tags.is_empty() {
+            String::new()
+        } else {
+            let badges: Vec<String> = note.tags.iter()
+                .map(|t| format!(r#"<span class="tag-badge">{}</span>"#, t))
+                .collect();
+            format!(r#"<div class="note-tags">{}</div>"#, badges.join(""))
+        };
+
+        // Smart plain-text preview from markdown content
+        let preview = plain_text_preview(&note.content, 240);
+
+        // Relative date
+        let date_str = note.created_at.format("%b %d").to_string();
+
         notes_html.push_str(&format!(
-            r#"<div class="note-card">
+            r#"<a href="/kb/note/{id}" class="note-card" style="margin-left: {indent}px;">
                 <div class="note-header">
-                    <span class="note-id"><a href="/kb/note/{}">[{}]</a></span>
-                    <span class="note-title">{}</span>
+                    <span class="note-id">{id}</span>
+                    <span class="note-title">{title}</span>
+                    <span class="note-date">{date}</span>
                 </div>
-                <div class="note-preview">{}</div>
+                <div class="note-preview">{preview}</div>
+                {tags}
                 <div class="note-meta">
-                    <a href="/kb/tree/{}" class="btn btn-sm">🌳 Tree</a>
+                    <span class="note-depth">depth {depth}</span>
+                    <span class="note-tree-link" onclick="event.preventDefault(); window.location='/kb/tree/{id}';">tree</span>
                 </div>
-            </div>"#,
-            note.id,
-            note.id,
-            note.title,
-            &note.content.chars().take(100).collect::<String>(),
-            note.id
+            </a>"#,
+            id = note.id,
+            indent = indent_px,
+            title = note.title,
+            date = date_str,
+            preview = preview,
+            tags = tags_html,
+            depth = note.id.level(),
         ));
     }
     
     let content = format!(
         r#"
         <div class="page-header">
-            <h2>📚 Knowledge Base</h2>
+            <h2>Knowledge Base</h2>
             <div class="header-actions">
-                <span class="note-count">{} notes</span>
+                <span class="note-count">{count} {noun}</span>
             </div>
         </div>
         <div class="notes-list">
-            {}
+            {notes}
         </div>
         "#,
-        notes.len(),
-        if notes_html.is_empty() {
-            "<p class='empty-state'>No notes yet. Use 'kb create' to add notes.</p>".to_string()
+        count = notes.len(),
+        noun = if notes.len() == 1 { "note" } else { "notes" },
+        notes = if notes_html.is_empty() {
+            "<p class='empty-state'>No notes yet. Use <code>kb create</code> to add notes.</p>".to_string()
         } else {
             notes_html
         }
@@ -535,33 +607,73 @@ async fn kb_view_note(database_url: Option<String>, note_id: String) -> Html<Str
         relations_html.push_str("</div>");
     }
     
+    // Build tags for detail page
+    let tags_html = if note.tags.is_empty() {
+        String::new()
+    } else {
+        let badges: Vec<String> = note.tags.iter()
+            .map(|t| format!(r#"<span class="tag-badge">{}</span>"#, t))
+            .collect();
+        format!(r#"<div class="note-tags-detail">{}</div>"#, badges.join(""))
+    };
+
+    // Build breadcrumb with full ancestry
+    let mut breadcrumb_parts = vec![r#"<a href="/kb">KB</a>"#.to_string()];
+    {
+        // Walk up the ancestors and push each one
+        let mut ancestors = Vec::new();
+        let mut current = id.clone();
+        while let Some(pid) = current.parent() {
+            ancestors.push(pid.clone());
+            current = pid;
+        }
+        ancestors.reverse();
+        for anc in &ancestors {
+            breadcrumb_parts.push(format!(
+                r#"<a href="/kb/note/{}">{}</a>"#,
+                anc, anc
+            ));
+        }
+    }
+    breadcrumb_parts.push(format!("<span>{}</span>", note_id));
+    let breadcrumb = breadcrumb_parts.join(r#" <span class="bc-sep">/</span> "#);
+
+    // Render markdown content
+    let rendered_content = render_markdown(&note.content);
+
     let content = format!(
         r#"
         <div class="note-detail">
             <div class="note-breadcrumb">
-                <a href="/kb">📚 KB</a> / <span>[{}]</span>
+                {breadcrumb}
             </div>
-            <h2 class="note-title-large">[{}] {}</h2>
-            <div class="note-content-full">
-                {}
+            <h1 class="note-title-large">{title}</h1>
+            <div class="note-meta-bar-top">
+                <span class="note-id-detail">{note_id}</span>
+                <span class="note-date-detail">{date}</span>
+                {tags}
             </div>
+            <article class="note-content-full prose">
+                {content}
+            </article>
             <div class="note-meta-bar">
-                <span>Created: {}</span>
-                <a href="/kb/tree/{}" class="btn btn-sm">🌳 View in Tree</a>
+                <span>Last updated {updated}</span>
+                <a href="/kb/tree/{note_id}" class="btn btn-sm">View in tree</a>
             </div>
         </div>
         <div class="note-relationships">
-            {}
+            {relations}
         </div>
         "#,
-        note_id,
-        note_id,
-        note.title,
-        note.content.replace("\n", "<br>"),
-        note.created_at.format("%Y-%m-%d %H:%M"),
-        note_id,
-        if relations_html.is_empty() {
-            "<p class='empty-state'>No relationships yet</p>".to_string()
+        breadcrumb = breadcrumb,
+        title = note.title,
+        note_id = note_id,
+        date = note.created_at.format("%b %d, %Y"),
+        tags = tags_html,
+        content = rendered_content,
+        updated = note.updated_at.format("%b %d, %Y at %H:%M"),
+        relations = if relations_html.is_empty() {
+            "<p class='empty-state'>No relationships yet.</p>".to_string()
         } else {
             relations_html
         }

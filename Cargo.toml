@@ -1,6 +1,6 @@
 [package]
 name = "agent-office"
-version = "0.1.13"
+version = "0.1.14"
 edition = "2024"
 license = "MIT"
 description = "A Rust-based multi-agent system with graph-structured data storage, mail system, and Zettelkasten-style knowledge base"
@@ -25,6 +25,7 @@ anyhow = "1.0.95"
 dotenvy = "0.15.7"
 axum = { version = "0.8.8", features = ["tokio", "macros"] }
 tower-http = { version = "0.6.8", features = ["fs", "cors"] }
+pulldown-cmark = "0.12"
 
 [dev-dependencies]
 tokio-test = "0.4.4"

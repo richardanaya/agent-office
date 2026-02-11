@@ -31,7 +31,7 @@ pub const HTML_HEADER: &str = r#"<!DOCTYPE html>
 pub const HTML_FOOTER: &str = r#"
         </main>
         <footer class="site-footer">
-            <span class="footer-mono">agent-office v0.1.0</span>
+            <span class="footer-mono">agent-office v0.1.14</span>
         </footer>
     </div>
 </body>
@@ -829,25 +829,31 @@ textarea.form-control {
     }
 }
 
-/* --- Knowledge Base Styles --- */
+/* ============================================================
+   Knowledge Base — Zettelkasten Reading Experience
+   ============================================================ */
+
+/* --- KB List Page --- */
 
 .page-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
-    padding-bottom: 16px;
+    align-items: baseline;
+    margin-bottom: 20px;
+    padding-bottom: 14px;
     border-bottom: 1px solid var(--color-border-light);
 }
 
 .page-header h2 {
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 600;
     margin: 0;
+    border: none;
+    padding: 0;
 }
 
 .note-count {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--color-text-muted);
     font-family: var(--font-mono);
 }
@@ -855,75 +861,148 @@ textarea.form-control {
 .notes-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 2px;
 }
 
+/* Note cards are now <a> tags — full-card tap targets for mobile */
 .note-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
     background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    padding: 16px;
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    border-left: 3px solid var(--color-border-light);
+    padding: 14px 16px;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 
-.note-card:hover {
-    border-color: var(--color-primary-border);
-    box-shadow: var(--shadow-sm);
+.note-card:hover, .note-card:focus {
+    border-left-color: var(--color-primary);
+    background: var(--color-primary-light);
+    outline: none;
+}
+
+.note-card:active {
+    background: var(--color-primary-light);
 }
 
 .note-header {
     display: flex;
     align-items: baseline;
     gap: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
 }
 
 .note-id {
     font-family: var(--font-mono);
-    font-size: 13px;
+    font-size: 12px;
     color: var(--color-primary);
     font-weight: 500;
-}
-
-.note-id a {
-    color: inherit;
-    text-decoration: none;
-}
-
-.note-id a:hover {
-    text-decoration: underline;
+    flex-shrink: 0;
 }
 
 .note-title {
     font-weight: 600;
     font-size: 15px;
+    line-height: 1.35;
+    flex: 1;
+    min-width: 0;
+}
+
+.note-date {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 .note-preview {
     color: var(--color-text-secondary);
     font-size: 13px;
-    line-height: 1.5;
-    margin-bottom: 12px;
+    line-height: 1.55;
+    margin-bottom: 6px;
+    /* Clamp to 3 lines on mobile */
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.note-tags, .note-tags-detail {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.tag-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    padding: 1px 8px;
+    background: var(--color-neutral-bg);
+    color: var(--color-text-secondary);
+    border-radius: 100px;
+    border: 1px solid var(--color-border-light);
 }
 
 .note-meta {
     display: flex;
-    gap: 8px;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
 }
 
-/* Note Detail Page */
+.note-depth {
+    opacity: 0.6;
+}
+
+.note-tree-link {
+    cursor: pointer;
+    color: var(--color-primary);
+}
+
+.note-tree-link:hover {
+    text-decoration: underline;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--color-text-muted);
+    font-size: 14px;
+}
+
+.empty-state code {
+    font-family: var(--font-mono);
+    background: var(--color-neutral-bg);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+}
+
+/* --- Note Detail Page --- */
+
 .note-detail {
     background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    padding: 24px;
+    padding: 0;
     margin-bottom: 24px;
 }
 
 .note-breadcrumb {
     font-size: 13px;
     color: var(--color-text-muted);
-    margin-bottom: 12px;
+    margin-bottom: 16px;
+    line-height: 1.6;
+    position: sticky;
+    top: 0;
+    background: var(--color-surface);
+    padding: 10px 0;
+    z-index: 10;
+    border-bottom: 1px solid var(--color-border-light);
 }
 
 .note-breadcrumb a {
@@ -935,16 +1014,208 @@ textarea.form-control {
     text-decoration: underline;
 }
 
+.bc-sep {
+    color: var(--color-border);
+    margin: 0 2px;
+}
+
 .note-title-large {
-    font-size: 24px;
+    font-size: 26px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    color: var(--color-text);
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    border: none;
+    padding: 0;
+}
+
+.note-meta-bar-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--color-border-light);
+}
+
+.note-id-detail {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-primary);
+    font-weight: 500;
+    background: var(--color-primary-light);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+}
+
+.note-date-detail {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+}
+
+.note-tags-detail {
+    margin-bottom: 0;
+}
+
+/* --- Markdown Prose Styles --- */
+
+.prose {
+    font-size: 16px;
+    line-height: 1.75;
+    color: var(--color-text);
+    margin-bottom: 24px;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+    font-family: var(--font-sans);
     font-weight: 600;
-    margin: 0 0 16px 0;
+    color: var(--color-text);
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    border: none;
+    padding: 0;
+}
+
+.prose h1 { font-size: 1.5em; }
+.prose h2 { font-size: 1.3em; }
+.prose h3 { font-size: 1.15em; }
+.prose h4 { font-size: 1em; }
+
+.prose p {
+    margin: 0 0 1em 0;
+    font-size: inherit;
+    color: inherit;
+}
+
+.prose ul, .prose ol {
+    margin: 0 0 1em 0;
+    padding-left: 1.5em;
+}
+
+.prose li {
+    margin-bottom: 0.35em;
+    line-height: 1.65;
+}
+
+.prose li > ul, .prose li > ol {
+    margin-top: 0.35em;
+    margin-bottom: 0;
+}
+
+.prose blockquote {
+    margin: 0 0 1em 0;
+    padding: 0.75em 1em;
+    border-left: 3px solid var(--color-primary-border);
+    background: var(--color-primary-light);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+.prose blockquote p:last-child {
+    margin-bottom: 0;
+}
+
+.prose code {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    background: var(--color-neutral-bg);
+    padding: 0.15em 0.4em;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border-light);
+}
+
+.prose pre {
+    margin: 0 0 1em 0;
+    padding: 14px 16px;
+    background: #1e293b;
+    color: #e2e8f0;
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+    font-size: 0.85em;
+    line-height: 1.6;
+    -webkit-overflow-scrolling: touch;
+}
+
+.prose pre code {
+    font-family: var(--font-mono);
+    background: none;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    font-size: inherit;
+    color: inherit;
+}
+
+.prose a {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-decoration-color: var(--color-primary-border);
+    text-underline-offset: 2px;
+    transition: text-decoration-color var(--transition-fast);
+}
+
+.prose a:hover {
+    text-decoration-color: var(--color-primary);
+}
+
+.prose strong {
+    font-weight: 600;
     color: var(--color-text);
 }
 
+.prose em {
+    font-style: italic;
+}
+
+.prose hr {
+    border: none;
+    border-top: 1px solid var(--color-border-light);
+    margin: 1.5em 0;
+}
+
+.prose table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 1em 0;
+    font-size: 0.9em;
+}
+
+.prose th, .prose td {
+    padding: 8px 12px;
+    border: 1px solid var(--color-border);
+    text-align: left;
+}
+
+.prose th {
+    background: var(--color-neutral-bg);
+    font-weight: 600;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.prose img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-md);
+}
+
+/* Task lists (checkbox lists) */
+.prose ul li input[type="checkbox"] {
+    margin-right: 6px;
+}
+
 .note-content-full {
-    font-size: 14px;
-    line-height: 1.7;
+    font-size: 16px;
+    line-height: 1.75;
     color: var(--color-text);
     margin-bottom: 20px;
 }
@@ -957,9 +1228,12 @@ textarea.form-control {
     border-top: 1px solid var(--color-border-light);
     font-size: 12px;
     color: var(--color-text-muted);
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
-/* Note Relationships */
+/* --- Note Relationships --- */
+
 .note-relationships {
     background: var(--color-surface-sunken);
     border: 1px solid var(--color-border);
@@ -976,38 +1250,44 @@ textarea.form-control {
 }
 
 .relation-section h4 {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
-    color: var(--color-text-secondary);
+    color: var(--color-text-muted);
     margin: 0 0 8px 0;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.05em;
+    font-family: var(--font-mono);
 }
 
 .relation-link {
     display: block;
-    padding: 8px 12px;
+    padding: 10px 14px;
     margin-bottom: 4px;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     text-decoration: none;
     color: var(--color-text);
-    font-size: 13px;
+    font-size: 14px;
     transition: background var(--transition-fast);
+    /* Good touch target */
+    min-height: 44px;
+    display: flex;
+    align-items: center;
 }
 
-.relation-link:hover {
+.relation-link:hover, .relation-link:active {
     background: var(--color-primary-light);
     border-color: var(--color-primary-border);
 }
 
-/* Tree View */
+/* --- Tree View --- */
+
 .tree-view {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    padding: 24px;
+    padding: 20px;
 }
 
 .tree-header {
@@ -1017,11 +1297,15 @@ textarea.form-control {
     margin-bottom: 20px;
     padding-bottom: 16px;
     border-bottom: 1px solid var(--color-border-light);
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .tree-header h2 {
-    font-size: 20px;
+    font-size: 18px;
     margin: 0;
+    border: none;
+    padding: 0;
 }
 
 .tree-structure {
@@ -1045,7 +1329,7 @@ textarea.form-control {
 
 .tree-node {
     display: block;
-    padding: 10px 14px;
+    padding: 12px 14px;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
@@ -1053,9 +1337,13 @@ textarea.form-control {
     color: var(--color-text);
     font-size: 14px;
     transition: all var(--transition-fast);
+    /* 44px minimum touch target */
+    min-height: 44px;
+    display: flex;
+    align-items: center;
 }
 
-.tree-node:hover {
+.tree-node:hover, .tree-node:active {
     background: var(--color-surface-raised);
     border-color: var(--color-primary-border);
 }
@@ -1077,6 +1365,175 @@ textarea.form-control {
     border-top: 1px solid var(--color-border-light);
     font-size: 13px;
     color: var(--color-text-muted);
+}
+
+/* ============================================================
+   Mobile Responsive — KB Focus
+   ============================================================ */
+
+@media (max-width: 768px) {
+    /* Global layout */
+    .container {
+        padding: 0;
+    }
+
+    .navbar {
+        margin: 0;
+        border-radius: 0;
+        padding: 0 14px;
+    }
+
+    .navbar-inner {
+        height: 48px;
+    }
+
+    .navbar-title {
+        font-size: 14px;
+    }
+
+    .navbar-links a {
+        font-size: 12px;
+        padding: 5px 8px;
+    }
+
+    .content {
+        padding: 16px;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+
+    /* KB list */
+    .page-header {
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+    }
+
+    .page-header h2 {
+        font-size: 18px;
+    }
+
+    .notes-list {
+        gap: 1px;
+    }
+
+    .note-card {
+        padding: 12px 14px;
+        /* On mobile, remove the Luhmann indent so notes don't get squished */
+        margin-left: 0 !important;
+        border-left-width: 3px;
+    }
+
+    .note-header {
+        gap: 6px;
+    }
+
+    .note-title {
+        font-size: 14px;
+    }
+
+    .note-preview {
+        font-size: 13px;
+        -webkit-line-clamp: 2;
+    }
+
+    .note-date {
+        display: none; /* save space; date shown on detail */
+    }
+
+    .note-meta {
+        font-size: 10px;
+    }
+
+    /* Note detail */
+    .note-breadcrumb {
+        font-size: 12px;
+        padding: 8px 0;
+    }
+
+    .note-title-large {
+        font-size: 22px;
+    }
+
+    .note-meta-bar-top {
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+    }
+
+    .prose {
+        font-size: 15px;
+        line-height: 1.7;
+    }
+
+    .prose h1 { font-size: 1.35em; }
+    .prose h2 { font-size: 1.2em; }
+    .prose h3 { font-size: 1.1em; }
+
+    .prose pre {
+        padding: 12px;
+        font-size: 0.8em;
+        border-radius: var(--radius-sm);
+    }
+
+    .prose table {
+        font-size: 0.85em;
+    }
+
+    .prose th, .prose td {
+        padding: 6px 8px;
+    }
+
+    /* Relationships */
+    .note-relationships {
+        padding: 14px;
+    }
+
+    .relation-link {
+        padding: 12px 14px;
+        font-size: 13px;
+    }
+
+    /* Tree view */
+    .tree-view {
+        padding: 14px;
+    }
+
+    .tree-header h2 {
+        font-size: 16px;
+    }
+
+    .tree-node {
+        padding: 12px;
+        font-size: 13px;
+    }
+}
+
+/* Small phones */
+@media (max-width: 400px) {
+    .content {
+        padding: 12px;
+    }
+
+    .note-card {
+        padding: 10px 12px;
+    }
+
+    .note-title {
+        font-size: 13px;
+    }
+
+    .note-title-large {
+        font-size: 20px;
+    }
+
+    .prose {
+        font-size: 14px;
+    }
+
+    .tag-badge {
+        font-size: 10px;
+        padding: 1px 6px;
+    }
 }
 
 /* --- Send Message Form --- */

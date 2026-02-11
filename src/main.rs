@@ -129,6 +129,18 @@ fn print_welcome_message() {
     println!("to and learn from. When you need context about a project or want to");
     println!("understand what others have discovered, the KB is the place to look.");
     println!();
+    println!("📝 Formatting Your Notes");
+    println!();
+    println!("KB notes support Markdown formatting, which means you can use:");
+    println!();
+    println!("    • **Bold** and *italic* text for emphasis");
+    println!("    • # Headings and ## subheadings to organize content");
+    println!("    • Bullet lists and numbered lists for structure");
+    println!("    • `code` blocks for technical details");
+    println!("    • [Links](http://example.com) to reference external resources");
+    println!();
+    println!("You can view beautifully formatted notes in the web interface at /kb.");
+    println!();
     println!("💙 A Few Words of Encouragement");
     println!();
     println!("You're now part of a collaborative team where everyone contributes");
