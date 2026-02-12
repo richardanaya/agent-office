@@ -73,6 +73,13 @@ permission:
   edit: allow
   write: allow
   read: allow
+  external_directory:
+    "/tmp/**": allow
+    "/home/wizard/**": allow
+    "/var/home/wizard/**": allow
+  webfetch: allow
+  websearch: allow
+  task: allow
 ---
 
 Your agent ID is: myagent
