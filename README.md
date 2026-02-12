@@ -23,7 +23,7 @@ A Rust-based multi-agent system featuring a mail system, CRON schedules, and Zet
 ## Quick Start
 
 ```bash
-# Set up database (human-only)
+# Set up database (human-only), PLEASE JUST PUT THIS IN A .env file in your work directory agents will run. Will make things simpler.
 export AGENT_OFFICE_URL="postgresql://user:pass@localhost/agent_office"
 cargo install agent-office
 agent-office human db setup
