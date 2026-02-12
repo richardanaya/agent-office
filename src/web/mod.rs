@@ -113,6 +113,14 @@ fn create_router(database_url: Option<String>) -> Router {
             let db = db_url2.clone();
             move |Path(agent_id): Path<String>| inbox_view((*db).clone(), agent_id)
         }))
+        .route("/mail/{mail_id}/read", post({
+            let db = db_url2.clone();
+            move |Path(mail_id): Path<String>| mark_mail_read((*db).clone(), mail_id)
+        }))
+        .route("/mail/inbox/{agent_id}/read-all", post({
+            let db = db_url2.clone();
+            move |Path(agent_id): Path<String>| mark_all_mail_read((*db).clone(), agent_id)
+        }))
         
         // Outbox view
         .route("/mail/outbox/{agent_id}", get({
@@ -896,34 +904,72 @@ async fn inbox_view(database_url: Option<String>, agent_id: String) -> Html<Stri
         (mail, agent.name)
     };
     
+    // Count unread messages
+    let unread_count = inbox_mail.iter().filter(|m| !m.read).count();
+    
     let mail_html = inbox_mail.iter()
         .map(|m| {
             let status_class = if m.read { "read" } else { "unread" };
+            let mail_id_short = &m.id.to_string()[..8];
+            
+            let mark_read_button = if !m.read {
+                format!(
+                    r##"<button class="btn btn-sm btn-secondary" hx-post="/mail/{}/read" hx-target="#mail-{}" hx-swap="outerHTML">Mark as Read</button>"##,
+                    m.id, mail_id_short
+                )
+            } else {
+                String::new()
+            };
+            
+            let read_badge = if m.read { 
+                r#"<span class="badge badge-secondary">Read</span>"# 
+            } else { 
+                r#"<span class="badge badge-success">Unread</span>"# 
+            };
+            
             format!(
-                r#"<div class="mail-card {}">
+                r##"<div id="mail-{}" class="mail-card {}">
                     <div class="mail-header">
                         <span class="mail-subject">{}</span>
-                        <span class="mail-meta">{}</span>
+                        <span class="mail-meta">{} {}</span>
                     </div>
                     <div class="mail-body">{}</div>
-                </div>"#,
-                status_class, m.subject, m.created_at.format("%Y-%m-%d %H:%M"), m.body
+                    <div class="mail-actions">{}</div>
+                </div>"##,
+                mail_id_short, status_class, m.subject, m.created_at.format("%Y-%m-%d %H:%M"), 
+                read_badge, m.body, mark_read_button
             )
         })
         .collect::<String>();
     
+    // Mark All as Read button (only show if there are unread messages)
+    let mark_all_button = if unread_count > 0 {
+        format!(
+            r##"<button class="btn btn-sm btn-success" hx-post="/mail/inbox/{}/read-all" hx-target="#inbox-content" hx-swap="innerHTML">✓ Mark All as Read ({} unread)</button>"##,
+            agent_id, unread_count
+        )
+    } else {
+        String::new()
+    };
+    
     let content = format!(
-        r#"
+        r##"
+        <div id="inbox-content">
         <div class="back-link">
             <a href="/" class="btn btn-secondary btn-sm">&larr; Back to Dashboard</a>
         </div>
-        <h2>Inbox: {} <span class="section-count">{} messages</span></h2>
+        <div class="inbox-header">
+            <h2>Inbox: {} <span class="section-count">{} messages</span></h2>
+            {}
+        </div>
         <div class="mail-list">
             {}
         </div>
-        "#,
+        </div>
+        "##,
         agent_name,
         inbox_mail.len(),
+        mark_all_button,
         if mail_html.is_empty() {
             "<p class='empty-state'>No mail in inbox</p>".to_string()
         } else {
@@ -1106,5 +1152,103 @@ async fn send_mail(database_url: Option<String>, body: axum::body::Bytes) -> Htm
         Err(_) => Html(format!(
             r#"<div class="send-result error">✗ Failed to send message</div>"#
         )),
+    }
+}
+
+// Mark a single mail as read
+async fn mark_mail_read(database_url: Option<String>, mail_id: String) -> Html<String> {
+    let result = if let Some(url) = database_url {
+        let pool = match sqlx::postgres::PgPool::connect(&url).await {
+            Ok(p) => p,
+            Err(_) => return Html("<div class='error'>Database connection failed</div>".to_string()),
+        };
+        let storage = PostgresStorage::new(pool);
+        let service = MailServiceImpl::new(storage);
+        
+        // Try to parse as UUID first
+        if let Ok(id) = uuid::Uuid::parse_str(&mail_id) {
+            service.mark_mail_as_read(id).await
+        } else {
+            // Try as short ID
+            service.mark_mail_as_read_by_short_id(&mail_id).await
+        }
+    } else {
+        let storage = InMemoryStorage::new();
+        let service = MailServiceImpl::new(storage);
+        
+        if let Ok(id) = uuid::Uuid::parse_str(&mail_id) {
+            service.mark_mail_as_read(id).await
+        } else {
+            service.mark_mail_as_read_by_short_id(&mail_id).await
+        }
+    };
+    
+    match result {
+        Ok(_) => Html(r#"<span class="badge badge-success">✓ Read</span>"#.to_string()),
+        Err(_) => Html(r#"<span class="badge badge-error">✗ Failed</span>"#.to_string()),
+    }
+}
+
+// Mark all mail in inbox as read
+async fn mark_all_mail_read(database_url: Option<String>, agent_id: String) -> Html<String> {
+    let result = if let Some(url) = database_url.clone() {
+        let pool = match sqlx::postgres::PgPool::connect(&url).await {
+            Ok(p) => p,
+            Err(_) => return Html("<div class='error'>Database connection failed</div>".to_string()),
+        };
+        let storage = PostgresStorage::new(pool);
+        let service = MailServiceImpl::new(storage);
+        
+        // Get mailbox and mark all unread mail as read
+        match service.get_agent_mailbox(agent_id.clone()).await {
+            Ok(mailbox) => {
+                match service.get_mailbox_inbox(mailbox.id).await {
+                    Ok(mail) => {
+                        let mut marked_count = 0;
+                        for m in mail {
+                            if !m.read {
+                                if let Ok(_) = service.mark_mail_as_read(m.id).await {
+                                    marked_count += 1;
+                                }
+                            }
+                        }
+                        Ok(marked_count)
+                    }
+                    Err(_) => Err(()),
+                }
+            }
+            Err(_) => Err(()),
+        }
+    } else {
+        let storage = InMemoryStorage::new();
+        let service = MailServiceImpl::new(storage);
+        
+        match service.get_agent_mailbox(agent_id.clone()).await {
+            Ok(mailbox) => {
+                match service.get_mailbox_inbox(mailbox.id).await {
+                    Ok(mail) => {
+                        let mut marked_count = 0;
+                        for m in mail {
+                            if !m.read {
+                                if let Ok(_) = service.mark_mail_as_read(m.id).await {
+                                    marked_count += 1;
+                                }
+                            }
+                        }
+                        Ok(marked_count)
+                    }
+                    Err(_) => Err(()),
+                }
+            }
+            Err(_) => Err(()),
+        }
+    };
+    
+    match result {
+        Ok(_count) => {
+            // Return updated inbox view
+            inbox_view(database_url, agent_id).await
+        }
+        Err(_) => Html(templates::error_page("Failed to mark mail as read")),
     }
 }

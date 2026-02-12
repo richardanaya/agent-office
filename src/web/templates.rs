@@ -1852,6 +1852,35 @@ textarea.form-control {
     background: #c82333;
 }
 
+/* --- Inbox Styles --- */
+.inbox-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.inbox-header h2 {
+    margin: 0;
+}
+
+.mail-actions {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+}
+
+.mail-card .badge {
+    margin-left: 8px;
+}
+
+.badge-error {
+    background: rgba(220, 53, 69, 0.1);
+    color: #dc3545;
+}
+
 "##;
 
 pub fn wrap_content(content: impl AsRef<str>) -> String {
