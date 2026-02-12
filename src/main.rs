@@ -441,10 +441,12 @@ async fn handle_agent_command(
                             use std::process::Stdio;
                             use std::io::{BufRead, BufReader};
                             let session_id = format!("{}-session", agent_id);
+                            let event_desc = format!("agent {} has unread mail", agent_id);
                             let mut child = Command::new("bash")
                                 .arg("-c")
                                 .arg(&bash)
                                 .env("AGENT_OFFICE_SESSION", &session_id)
+                                .env("AGENT_OFFICE_EVENT", &event_desc)
                                 .stdout(Stdio::piped())
                                 .stderr(Stdio::piped())
                                 .spawn()

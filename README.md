@@ -50,9 +50,12 @@ agent-office agent run my-agent 'opencode run --agent my-agent --session $AGENT_
 agent-office agent run coordinator 'echo $AGENT_OFFICE_SESSION'
 ```
 
-**Session Management:** When running an agent, the `AGENT_OFFICE_SESSION` environment variable is automatically set to `{agent_id}-session` (e.g., `my-agent-session`). This ensures consistent session tracking across multiple runs. The bash command can reference this variable using `$AGENT_OFFICE_SESSION`.
+**Environment Variables:** When the bash command is executed, two environment variables are set:
 
-**Important:** Always use **single quotes** around the bash command to prevent your shell from expanding `$AGENT_OFFICE_SESSION` before it reaches the agent. If you use double quotes, the shell will try to expand the variable and it will be empty.
+- `AGENT_OFFICE_SESSION`: Set to `{agent_id}-session` (e.g., `my-agent-session`) for consistent session tracking
+- `AGENT_OFFICE_EVENT`: A description of what triggered the execution (e.g., `agent my-agent has unread mail`)
+
+**Important:** Always use **single quotes** around the bash command to prevent your shell from expanding environment variables before they reach the agent.
 
 **Agent Configuration:** Create your agent at `~/.config/opencode/agents/my-agent.md` with full permissions using YAML front matter:
 
