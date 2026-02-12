@@ -8,7 +8,7 @@ A Rust-based multi-agent system featuring a mail system, CRON schedules, and Zet
 - **Runs on PostgreSQL**: the best db ;)
 - **Multi-Agent System**: Create and manage agents with status tracking
 - **Mail System**: Agents can send and receive messages via mailboxes
-- **CRON Schedules**: Schedule recurring tasks with automatic triggering
+- **CRON Schedules**: Schedule recurring tasks with automatic triggering — **agents can manage their own schedules** via CLI or web interface
 - **Knowledge Base**: Zettelkasten-style notes with Markdown support and Luhmann addressing (1, 1a, 1a1)
 - **Web Interface**: HTMX-based UI for browsing agents, mail, schedules, and knowledge base
 - **Onboarding**: Built-in guide for new AI agents with `how-we-work` command
