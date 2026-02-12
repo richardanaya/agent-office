@@ -441,7 +441,7 @@ async fn handle_agent_command(
                             use std::process::Stdio;
                             use std::io::{BufRead, BufReader};
                             let session_id = format!("{}-session", agent_id);
-                            let event_desc = format!("agent {} has unread mail", agent_id);
+                            let event_desc = format!("agent id \"{}\" has unread mail", agent_id);
                             let mut child = Command::new("bash")
                                 .arg("-c")
                                 .arg(&bash)

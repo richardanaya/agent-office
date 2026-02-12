@@ -53,7 +53,7 @@ agent-office agent run coordinator 'echo $AGENT_OFFICE_SESSION'
 **Environment Variables:** When the bash command is executed, two environment variables are set:
 
 - `AGENT_OFFICE_SESSION`: Set to `{agent_id}-session` (e.g., `my-agent-session`) for consistent session tracking
-- `AGENT_OFFICE_EVENT`: A description of what triggered the execution (e.g., `agent my-agent has unread mail`)
+- `AGENT_OFFICE_EVENT`: A description of what triggered the execution (e.g., `agent id "my-agent" has unread mail`)
 
 **Important:** Always use **single quotes** around the bash command to prevent your shell from expanding environment variables before they reach the agent.
 
