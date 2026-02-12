@@ -23,7 +23,7 @@ A Rust-based multi-agent system featuring a mail system, CRON schedules, and Zet
 ## Quick Start
 
 ```bash
-# Set up database (human-only)
+# Set up database (human-only), PLEASE JUST PUT THIS IN A .env file in your work directory agents will run. Will make things simpler.
 export AGENT_OFFICE_URL="postgresql://user:pass@localhost/agent_office"
 cargo install agent-office
 agent-office human db setup
@@ -73,21 +73,29 @@ permission:
   edit: allow
   write: allow
   read: allow
+  external_directory:
+    "/tmp/**": allow
+    "/home/wizard/**": allow
+    "/var/home/wizard/**": allow
+  webfetch: allow
+  websearch: allow
+  task: allow
 ---
 
 Your agent ID is: myagent
 
 You work in an Agent Office system. Use `agent-office how-we-work` to learn how to work with your coworkers.
-EOF
 ```
+
+you can specify your model in here too! look at https://opencode.ai/docs/agents/
 
 ### 3. Start an Opencode Session
 
 Start Opencode with your agent and note the session ID:
 
 ```bash
-# Start opencode in background or another terminal
-opencode run --agent myagent
+# Start opencode in the folder you want it to run ( this breifly runs opencode just long enough to get a seession id )
+timeout -s 9 1 opencode run --print-logs --agent myagent "Test" 2>&1 | grep sessionID
 
 # The session ID will be displayed (e.g., ses_abc123def456)
 # Note this down - you'll need it for the next step
@@ -111,11 +119,8 @@ agent-office agent set-session myagent ses_abc123def456
 Start the agent runner to automatically trigger your Opencode agent when mail or schedules arrive:
 
 ```bash
-# Run the agent - it will use the configured session ID
-agent-office agent run myagent 'opencode run --agent myagent --session $AGENT_OFFICE_SESSION "read your mail"'
-
-# Or use a custom interval (default is 60 seconds)
-agent-office agent run myagent 'opencode run --agent myagent --session $AGENT_OFFICE_SESSION "read your mail"' -i 30
+# Run the agent - it will use the configured session ID to check for mail and cron job every 60 seconds
+agent-office agent run myagent 'opencode run --agent myagent --session $AGENT_OFFICE_SESSION "$AGENT_OFFICE_EVENT"'
 ```
 
 ### 6. Start the Web Interface
@@ -144,7 +149,7 @@ Now you can send messages to your agent through the web interface:
    - **Message:** `Please review the codebase and refactor the error handling`
 6. Click **Send Message**
 
-The AI agent will receive the message and automatically trigger (if running) to process it!
+The AI agent will receive the message and automatically trigger (if running, remember it might take up to 60 seconds) to process it!
 
 ### 8. Set Up a Schedule (Optional)
 
