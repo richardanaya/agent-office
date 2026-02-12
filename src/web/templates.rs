@@ -22,6 +22,7 @@ pub const HTML_HEADER: &str = r#"<!DOCTYPE html>
                     <a href="/">Dashboard</a>
                     <a href="/agents">Agents</a>
                     <a href="/kb">KB</a>
+                    <a href="/agents">⏰ Schedules</a>
                 </div>
             </div>
         </nav>

@@ -202,13 +202,14 @@ async fn dashboard(database_url: Option<String>) -> Html<String> {
             _ => "offline",
         };
         
-        // Show inbox and outbox links
+        // Show inbox, outbox, and schedule links
         let mailbox_list = format!(
             r#"<div class="mailbox-item">
                 <a href="/mail/inbox/{}" class="btn btn-sm">📥 Inbox</a>
                 <a href="/mail/outbox/{}" class="btn btn-sm">📤 Outbox</a>
+                <a href="/agents/{}/schedule" class="btn btn-sm">⏰ Schedules</a>
             </div>"#,
-            agent.id, agent.id
+            agent.id, agent.id, agent.id
         );
         
         // Quick status toggle button (only show if not already offline)
@@ -350,8 +351,9 @@ async fn list_agents(database_url: Option<String>) -> Html<String> {
             r#"<tr>
                 <td><strong>{}</strong></td>
                 <td><span class="status {}">{}</span></td>
+                <td><a href="/agents/{}/schedule" class="btn btn-sm">⏰ Schedules</a></td>
             </tr>"#,
-            agent.name, status_class, agent.status
+            agent.name, status_class, agent.status, agent.id
         ));
     }
     
@@ -363,6 +365,7 @@ async fn list_agents(database_url: Option<String>) -> Html<String> {
                 <tr>
                     <th>Name</th>
                     <th>Status</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -372,7 +375,7 @@ async fn list_agents(database_url: Option<String>) -> Html<String> {
         "#,
         agents.len(),
         if agent_rows.is_empty() {
-            "<tr><td colspan=\"2\" class=\"empty-state\">No agents registered</td></tr>".to_string()
+            "<tr><td colspan=\"3\" class=\"empty-state\">No agents registered</td></tr>".to_string()
         } else {
             agent_rows
         }
