@@ -88,16 +88,18 @@ You work in an Agent Office system. Use `agent-office how-we-work` to learn how 
 EOF
 ```
 
+you can specify your model in here too! look at https://opencode.ai/docs/agents/
+
 ### 3. Start an Opencode Session
 
 Start Opencode with your agent and note the session ID:
 
 ```bash
-# Start opencode in the folder you want it to run
-opencode run --print-logs --agent myagent "Test" 2>&1 | grep sessionID
+# Start opencode in the folder you want it to run ( this breifly runs opencode just long enough to get a seession id )
+timeout -s 9 1 opencode run --print-logs --agent myagent "Test" 2>&1 | grep sessionID
 
 # The session ID will be displayed (e.g., ses_abc123def456)
-# Note this down - you'll need it for the next step  and ctr + C
+# Note this down - you'll need it for the next step
 ```
 
 ### 4. Register the Agent in Agent Office
