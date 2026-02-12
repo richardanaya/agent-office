@@ -149,7 +149,7 @@ Now you can send messages to your agent through the web interface:
    - **Message:** `Please review the codebase and refactor the error handling`
 6. Click **Send Message**
 
-The AI agent will receive the message and automatically trigger (if running) to process it!
+The AI agent will receive the message and automatically trigger (if running, remember it might take up to 60 seconds) to process it!
 
 ### 8. Set Up a Schedule (Optional)
 
