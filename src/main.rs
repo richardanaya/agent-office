@@ -424,10 +424,20 @@ async fn handle_agent_command(
             let agent = service.set_agent_status(id.clone(), status.clone()).await?;
             println!("Updated agent '{}' status to: {}", id, agent.status);
         }
+        AgentCommands::SetSession { agent_id, session_id } => {
+            let agent = service.set_agent_session(agent_id.clone(), session_id.clone()).await?;
+            if let Some(ref sid) = agent.session_id {
+                println!("Set session ID for agent '{}' to: {}", agent_id, sid);
+            } else {
+                println!("Cleared session ID for agent '{}' (using agent ID as fallback)", agent_id);
+            }
+        }
         AgentCommands::Run { agent_id, bash, interval } => {
             use tokio::time::{sleep, Duration};
             use std::process::Command;
             
+            // Get the agent to access session_id (for use inside the loop)
+            let agent = service.get_agent(agent_id.clone()).await?;
             let _ = service.set_agent_status(agent_id.clone(), "online").await;
             println!("Agent '{}' is now online", agent_id);
             println!("Watching for new mail and schedules (checking every {} seconds)", interval);
@@ -440,16 +450,18 @@ async fn handle_agent_command(
             let mut running = true;
             let mut check_immediately = true;
             
+            // Determine session ID: use agent's session_id if set, otherwise use agent_id as fallback
+            let session_id = agent.session_id.clone().unwrap_or_else(|| agent_id.clone());
+            
             // Helper function to execute bash command
-            async fn execute_bash(agent_id: &str, bash: &str, event_desc: &str) {
+            async fn execute_bash(_agent_id: &str, session_id: &str, bash: &str, event_desc: &str) {
                 use std::process::Stdio;
                 use std::io::{BufRead, BufReader};
                 
-                let session_id = format!("{}-session", agent_id);
                 let mut child = Command::new("bash")
                     .arg("-c")
                     .arg(bash)
-                    .env("AGENT_OFFICE_SESSION", &session_id)
+                    .env("AGENT_OFFICE_SESSION", session_id)
                     .env("AGENT_OFFICE_EVENT", event_desc)
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
@@ -501,7 +513,7 @@ async fn handle_agent_command(
                             }
                             println!("Executing: {}", bash);
                             let event_desc = format!("agent id \"{}\" has unread mail", agent_id);
-                            execute_bash(&agent_id, &bash, &event_desc).await;
+                            execute_bash(&agent_id, &session_id, &bash, &event_desc).await;
                             println!("\n✓ Command completed - waiting for new messages...");
                             triggered = true;
                         }
@@ -512,7 +524,7 @@ async fn handle_agent_command(
                             println!("\n⏰ Schedule triggered: {}", action);
                             println!("Executing: {}", bash);
                             let event_desc = format!("agent id \"{}\" received a scheduled action request \"{}\"", agent_id, action);
-                            execute_bash(&agent_id, &bash, &event_desc).await;
+                            execute_bash(&agent_id, &session_id, &bash, &event_desc).await;
                             println!("\n✓ Command completed - waiting for new messages...");
                             triggered = true;
                         }

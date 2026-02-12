@@ -37,6 +37,7 @@ pub trait MailService: Send + Sync {
     async fn get_agent(&self, id: AgentId) -> Result<Agent>;
     async fn list_agents(&self) -> Result<Vec<Agent>>;
     async fn set_agent_status(&self, agent_id: AgentId, status: impl Into<String> + Send) -> Result<Agent>;
+    async fn set_agent_session(&self, agent_id: AgentId, session_id: Option<String>) -> Result<Agent>;
     
     // Get agent by their mailbox ID (each agent has exactly one mailbox)
     async fn get_agent_by_mailbox(&self, mailbox_id: MailboxId) -> Result<Agent>;
@@ -156,6 +157,14 @@ impl<S: GraphStorage> MailService for MailServiceImpl<S> {
     async fn set_agent_status(&self, agent_id: AgentId, status: impl Into<String> + Send) -> Result<Agent> {
         let mut agent = self.get_agent(agent_id).await?;
         agent.status = status.into();
+        let node = agent.to_node();
+        self.storage.update_node(&node).await?;
+        Ok(agent)
+    }
+
+    async fn set_agent_session(&self, agent_id: AgentId, session_id: Option<String>) -> Result<Agent> {
+        let mut agent = self.get_agent(agent_id).await?;
+        agent.session_id = session_id;
         let node = agent.to_node();
         self.storage.update_node(&node).await?;
         Ok(agent)

@@ -289,6 +289,70 @@ p {
     margin: 0;
 }
 
+/* --- Session Editor --- */
+.agentcard .agentsession {
+    margin: 12px 0;
+    padding: 10px;
+    background: var(--color-bg-tertiary);
+    border-radius: 6px;
+    border: 1px solid var(--color-border-light);
+}
+
+.sessioneditor {
+    margin: 12px 0;
+    padding: 10px;
+    background: var(--color-bg-tertiary);
+    border-radius: 6px;
+    border: 1px solid var(--color-border-light);
+}
+
+.sessionform {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sessionform .formgroup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sessionform label {
+    font-weight: 500;
+    font-size: 12px;
+    color: var(--color-text-muted);
+    min-width: 70px;
+}
+
+.sessioninput {
+    flex: 1;
+    min-width: 150px;
+    padding: 4px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--color-bg);
+}
+
+.sessionhint {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-style: italic;
+}
+
+.sessiondisplay {
+    font-size: 12px;
+    margin-top: 8px;
+    font-family: var(--font-mono);
+}
+
+.sessiondisplay .textmuted {
+    color: var(--color-text-muted);
+}
+
 /* --- Status Badges --- */
 .status {
     display: inline-flex;

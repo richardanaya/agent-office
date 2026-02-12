@@ -94,6 +94,7 @@ fn create_router(database_url: Option<String>) -> Router {
     let db_url9 = Arc::new(database_url.clone());
     let db_url10 = Arc::new(database_url.clone());
     let db_url11 = Arc::new(database_url.clone());
+    let db_url12 = Arc::new(database_url.clone());
     
     Router::new()
         // Dashboard / Home
@@ -132,6 +133,12 @@ fn create_router(database_url: Option<String>) -> Router {
         .route("/agents/{agent_id}/status", post({
             let db = db_url3.clone();
             move |Path(agent_id): Path<String>| set_agent_status((*db).clone(), agent_id)
+        }))
+        
+        // Update agent session
+        .route("/agents/{agent_id}/session", post({
+            let db = db_url12.clone();
+            move |Path(agent_id): Path<String>, body: axum::body::Bytes| set_agent_session((*db).clone(), agent_id, body)
         }))
         
         // Send mail to agent
@@ -243,6 +250,36 @@ async fn dashboard(database_url: Option<String>) -> Html<String> {
             String::new()
         };
         
+        // Session ID display and editor
+        let session_display = agent.session_id.clone().unwrap_or_else(|| agent.id.clone());
+        let current_session = agent.session_id.clone().unwrap_or_default();
+        let session_editor = format!(
+            r##"<div class="sessioneditor">
+                <form hx-post="/agents/{id}/session" 
+                      hx-target="#agentsession{id}" 
+                      hx-swap="outerHTML"
+                      class="sessionform">
+                    <div class="formgroup">
+                        <label for="sessionid{id}">Session ID:</label>
+                        <input type="text" 
+                               id="sessionid{id}" 
+                               name="session_id" 
+                               value="{val}" 
+                               placeholder="{id}"
+                               class="sessioninput">
+                        <button type="submit" class="btn btnsecondary">Update</button>
+                    </div>
+                    <small class="sessionhint">Leave empty to use agent ID as fallback</small>
+                </form>
+                <div id="agentsession{id}" class="sessiondisplay">
+                    <strong>Current:</strong> {disp} <span class="textmuted">(fallback: {id})</span>
+                </div>
+            </div>"##,
+            id = agent.id,
+            val = current_session,
+            disp = session_display
+        );
+        
         agent_cards.push_str(&format!(
             r#"<div class="agent-card">
                 <div class="agent-info">
@@ -250,12 +287,15 @@ async fn dashboard(database_url: Option<String>) -> Html<String> {
                     <span class="status {}" id="agent-status-{}">{}</span>
                     {}
                 </div>
+                <div class="agentsession">
+                    {}
+                </div>
                 <div class="agent-mailboxes">
                     <h4>Mailboxes</h4>
                     {}
                 </div>
             </div>"#,
-            agent.name, status_class, agent.id, agent.status, status_button, mailbox_list
+            agent.name, status_class, agent.id, agent.status, status_button, session_editor, mailbox_list
         ));
     }
     
@@ -853,6 +893,47 @@ async fn set_agent_status(database_url: Option<String>, agent_id: String) -> Htm
             ))
         }
         Err(_) => Html(templates::error_page("Failed to update agent status")),
+    }
+}
+
+// Set agent session ID
+async fn set_agent_session(database_url: Option<String>, agent_id: String, body: axum::body::Bytes) -> Html<String> {
+    // Parse form data
+    let body_str = String::from_utf8_lossy(&body);
+    let session_id = body_str
+        .split('&')
+        .find(|p| p.starts_with("session_id="))
+        .and_then(|p| p.split('=').nth(1))
+        .map(|s| urlencoding::decode(s).ok())
+        .flatten()
+        .map(|s| if s.trim().is_empty() { None } else { Some(s.into_owned()) })
+        .unwrap_or(None);
+    
+    let result = if let Some(url) = database_url {
+        let pool = match sqlx::postgres::PgPool::connect(&url).await {
+            Ok(p) => p,
+            Err(_) => return Html(templates::error_page("Failed to connect to database")),
+        };
+        let storage = PostgresStorage::new(pool);
+        let service = MailServiceImpl::new(storage);
+        
+        service.set_agent_session(agent_id, session_id).await
+    } else {
+        let storage = InMemoryStorage::new();
+        let service = MailServiceImpl::new(storage);
+        
+        service.set_agent_session(agent_id, session_id).await
+    };
+    
+    match result {
+        Ok(agent) => {
+            let session_display = agent.session_id.clone().unwrap_or_else(|| agent.id.clone());
+            Html(format!(
+                r#"<div id="agentsession{}" class="sessiondisplay"><strong>Current:</strong> {} <span class="textmuted">(fallback: {})</span></div>"#,
+                agent.id, session_display, agent.id
+            ))
+        }
+        Err(_) => Html(templates::error_page("Failed to update agent session")),
     }
 }
 

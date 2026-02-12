@@ -123,6 +123,7 @@ pub struct Agent {
     pub id: AgentId,
     pub name: String,
     pub status: String,
+    pub session_id: Option<String>,
     pub created_at: Timestamp,
 }
 
@@ -133,6 +134,7 @@ impl Default for Agent {
             id: name.clone(),
             name,
             status: String::from("offline"),
+            session_id: None,
             created_at: Utc::now(),
         }
     }
@@ -156,6 +158,7 @@ impl Agent {
             id,
             name,
             status: String::from("offline"),
+            session_id: None,
             created_at: Utc::now(),
         }
     }
@@ -171,6 +174,12 @@ impl Agent {
             "status".to_string(),
             PropertyValue::String(self.status.clone()),
         );
+        if let Some(ref session_id) = self.session_id {
+            props.insert(
+                "session_id".to_string(),
+                PropertyValue::String(session_id.clone()),
+            );
+        }
 
         let mut node = Node::new("agent", props);
         // Convert string ID to deterministic UUID for storage
@@ -206,10 +215,17 @@ impl Agent {
             })
             .unwrap_or_else(|| String::from("offline"));
 
+        // Get session_id from properties, default to None if not present
+        let session_id = node.get_property("session_id").and_then(|v| match v {
+            PropertyValue::String(s) => Some(s.clone()),
+            _ => None,
+        });
+
         Some(Self {
             id,
             name,
             status,
+            session_id,
             created_at: node.created_at,
         })
     }

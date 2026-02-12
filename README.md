@@ -35,31 +35,165 @@ agent-office human web -p 8080
 agent-office how-we-work
 ```
 
-## 🤖 Running AI Agents with opencode
+## Running an Agent Office with Opencode
 
-The `agent run` command continuously monitors for new mail and scheduled tasks, automatically triggering your AI agent when either occurs:
+Agent Office works best when paired with an AI coding assistant like Opencode. Here's how to set up an integrated workflow:
+
+### 1. Create Your Human Agent First
+
+Before creating your AI assistant, create an agent to represent yourself first ;)
 
 ```bash
-# Run agent and have opencode process events (mail or schedules) when they occur
-# Note: Use single quotes to prevent shell from expanding $AGENT_OFFICE_SESSION
-agent-office agent run my-agent 'opencode run --agent my-agent --session $AGENT_OFFICE_SESSION "read your mail"'
-
-# Default check interval is 60 seconds
-# You can customize it with -i flag:
-agent-office agent run my-agent 'opencode run --agent my-agent --session $AGENT_OFFICE_SESSION "check inbox"' -i 30
-
-# Test the session variable
-agent-office agent run coordinator 'echo $AGENT_OFFICE_SESSION'
+# Register yourself as an agent (set status to "human" for fun!)
+agent-office agent register richard
+agent-office agent status richard human
 ```
+
+### 2. Create an Agent Descriptor in Opencode
+
+Now create your AI assistant. First, create an agent configuration file in your Opencode config directory:
+
+```bash
+# Create the agent descriptor file
+mkdir -p ~/.config/opencode/agents
+cat > ~/.config/opencode/agents/myagent.md << 'EOF'
+---
+description: My Agent Office agent
+mode: primary
+permission:
+  bash:
+    "*": allow
+  edit: allow
+  write: allow
+  read: allow
+---
+
+Your agent ID is: myagent
+
+You work in an Agent Office system. Use `agent-office how-we-work` to learn how to work with your coworkers.
+EOF
+```
+
+### 3. Start an Opencode Session
+
+Start Opencode with your agent and note the session ID:
+
+```bash
+# Start opencode in background or another terminal
+opencode run --agent myagent
+
+# The session ID will be displayed (e.g., ses_abc123def456)
+# Note this down - you'll need it for the next step
+```
+
+### 4. Register the Agent in Agent Office
+
+Create the agent in Agent Office and link it to your Opencode session:
+
+```bash
+# Register the agent
+agent-office agent register myagent
+
+# Set the session ID to match your opencode session
+# Use the format: ses_<your-opencode-session-id>
+agent-office agent set-session myagent ses_abc123def456
+```
+
+### 5. Run the Agent
+
+Start the agent runner to automatically trigger your Opencode agent when mail or schedules arrive:
+
+```bash
+# Run the agent - it will use the configured session ID
+agent-office agent run myagent 'opencode run --agent myagent --session $AGENT_OFFICE_SESSION "read your mail"'
+
+# Or use a custom interval (default is 60 seconds)
+agent-office agent run myagent 'opencode run --agent myagent --session $AGENT_OFFICE_SESSION "read your mail"' -i 30
+```
+
+### 6. Start the Web Interface
+
+Open a new terminal tab and start the web interface:
+
+```bash
+# Start the web server
+agent-office human web -p 8080
+
+# Visit http://127.0.0.1:8080 to see the dashboard
+```
+
+### 7. Send a Message
+
+Now you can send messages to your agent through the web interface:
+
+1. Open your browser to `http://127.0.0.1:8080`
+2. Find your AI agent on the dashboard
+3. Click **📥 Inbox** for the AI agent
+4. Use the "Send Message to Agent" form
+5. Fill in:
+   - **To:** `myagent` (your AI agent's name)
+   - **From:** `richard` (your human agent name)
+   - **Subject:** `Hello!`
+   - **Message:** `Please review the codebase and refactor the error handling`
+6. Click **Send Message**
+
+The AI agent will receive the message and automatically trigger (if running) to process it!
+
+### 8. Set Up a Schedule (Optional)
+
+You can either manually create a schedule through the web interface or ask your AI agent to do it:
+
+**Option A: Manual Setup via Web Interface**
+
+1. On the dashboard, find your AI agent
+2. Click **⏰ Schedules** button
+3. Click **New Schedule**
+4. Fill in:
+   - **CRON Expression:** `0 9 * * *` (daily at 9am) or `*/5 * * * *` (every 5 minutes for testing)
+   - **Action:** `Generate daily report` or `Check system status`
+5. Click **Create Schedule**
+
+**Option B: Ask Your AI Agent to Create It**
+
+Send a message asking the agent to create a schedule:
+
+1. Go to the AI agent's inbox
+2. Send a new message:
+   - **To:** `myagent`
+   - **From:** `richard`
+   - **Subject:** `Please create a daily schedule`
+   - **Message:** `Please create a schedule that runs every day at 9am with the action "Generate daily summary report". Use the command: agent-office schedule create myagent "0 9 * * *" "Generate daily summary report"`
+
+The AI agent will process the message and create the schedule for you!
 
 **Environment Variables:** When the bash command is executed, two environment variables are set:
 
-- `AGENT_OFFICE_SESSION`: Set to `{agent_id}-session` (e.g., `my-agent-session`) for consistent session tracking
+- `AGENT_OFFICE_SESSION`: The session ID from your agent's configuration (e.g., `ses_abc123def456`). This ensures all work happens in the same Opencode session for consistent context and state.
 - `AGENT_OFFICE_EVENT`: A description of what triggered the execution:
-  - For mail: `agent id "my-agent" has unread mail`
-  - For schedules: `agent id "my-agent" received a scheduled action request "action description"`
+  - For mail: `agent id "myagent" has unread mail`
+  - For schedules: `agent id "myagent" received a scheduled action request "action description"`
 
 **Important:** Always use **single quotes** around the bash command to prevent your shell from expanding environment variables before they reach the agent.
+
+### Managing Agent Session IDs
+
+The session ID links your Agent Office agent to a specific Opencode session. This ensures:
+- Consistent context across multiple triggers
+- Persistent state between executions
+- Proper tracking of which agent performed which action
+
+```bash
+# View current session ID for an agent
+agent-office agent get myagent
+
+# Change the session ID (e.g., when starting a new opencode session)
+agent-office agent set-session myagent ses_xyz789abc012
+
+# Clear the custom session (will use agent ID as fallback)
+agent-office agent set-session myagent
+
+# View and edit session IDs via web interface at http://127.0.0.1:8080
+```
 
 ## ⏰ Managing Schedules
 
@@ -153,12 +287,13 @@ Find your coworkers, let your coworkers know your status, and register yourself 
 Usage: agent-office agent <COMMAND>
 
 Commands:
-  register    Register a new agent
-  unregister  Unregister an agent (remove from the system)
-  list        List all agents
-  get         Get agent details
-  status      Set agent status (online, offline, away, etc.)
-  help        Print this message or the help of the given subcommand(s)
+  register     Register a new agent
+  unregister   Unregister an agent (remove from the system)
+  list         List all agents
+  get          Get agent details
+  status       Set agent status (online, offline, away, etc.)
+  set-session  Set agent session ID for consistent session tracking
+  help         Print this message or the help of the given subcommand(s)
 
 agent-office human --help
 Human-only tools (not for AI agents)
@@ -212,6 +347,7 @@ Visit `http://127.0.0.1:8080` to:
 - Manage CRON schedules for each agent with last run tracking
 - Browse the knowledge base with Markdown rendering
 - Set agents offline with one click
+- Edit agent session IDs for consistent bash execution tracking
 - Mobile-friendly responsive design
 
 ## License

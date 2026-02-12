@@ -130,6 +130,13 @@ pub enum AgentCommands {
         #[arg(short, long, default_value = "60")]
         interval: u64,
     },
+    /// Set agent session ID for consistent session tracking
+    SetSession {
+        /// Agent ID to set session for
+        agent_id: String,
+        /// Session ID (optional - if not provided, clears the session)
+        session_id: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]

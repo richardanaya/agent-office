@@ -27,6 +27,7 @@ dotenvy = "0.15.7"
 axum = { version = "0.8.8", features = ["tokio", "macros"] }
 tower-http = { version = "0.6.8", features = ["fs", "cors"] }
 pulldown-cmark = "0.12"
+urlencoding = "2.1"
 
 [dev-dependencies]
 tokio-test = "0.4.4"
