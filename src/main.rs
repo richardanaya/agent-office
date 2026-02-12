@@ -61,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
                 let schedule_service = ScheduleServiceImpl::new(pool);
                 handle_schedule_command(schedule_service, schedule_cmd).await?;
             } else {
-                eprintln!("Schedule commands require a database connection. Please set AGENT_OFFICE_URL or DATABASE_URL.");
+                println!("Schedule commands require a database connection. Please set AGENT_OFFICE_URL or DATABASE_URL.");
                 std::process::exit(1);
             }
         }
@@ -81,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             } else {
                 // Use in-memory storage
-                eprintln!("Agent run and schedule commands require a database connection. Please set AGENT_OFFICE_URL or DATABASE_URL.");
+                println!("Agent run and schedule commands require a database connection. Please set AGENT_OFFICE_URL or DATABASE_URL.");
                 std::process::exit(1);
             }
         }
@@ -468,7 +468,7 @@ async fn handle_agent_command(
                     let reader = BufReader::new(stderr);
                     for line in reader.lines() {
                         if let Ok(line) = line {
-                            eprintln!("{}", line);
+                            println!("{}", line);
                         }
                     }
                 }
@@ -507,15 +507,15 @@ async fn handle_agent_command(
                         }
                         
                         // Check for scheduled tasks
-                        eprintln!("DEBUG: Checking schedules for agent '{}' at time {}", agent_id, current_time.format("%Y-%m-%d %H:%M:%S"));
+                        println!("DEBUG: Checking schedules for agent '{}' at time {}", agent_id, current_time.format("%Y-%m-%d %H:%M:%S"));
                         let all_schedules = schedule_service.list_schedules_by_agent(&agent_id).await?;
-                        eprintln!("DEBUG: Found {} total schedules for agent", all_schedules.len());
+                        println!("DEBUG: Found {} total schedules for agent", all_schedules.len());
                         for (i, sched) in all_schedules.iter().enumerate() {
-                            eprintln!("DEBUG: Schedule {}: ID={}, cron='{}', action='{}', is_active={}, last_fired={:?}", 
+                            println!("DEBUG: Schedule {}: ID={}, cron='{}', action='{}', is_active={}, last_fired={:?}", 
                                 i, sched.id, sched.cron_expression, sched.action, sched.is_active, sched.last_fired_at);
                         }
                         let fired_actions = schedule_service.check_and_fire_schedules(&agent_id, current_time).await?;
-                        eprintln!("DEBUG: Fired {} schedules this tick", fired_actions.len());
+                        println!("DEBUG: Fired {} schedules this tick", fired_actions.len());
                         for action in fired_actions {
                             println!("\n⏰ Schedule triggered: {}", action);
                             println!("Executing: {}", bash);
