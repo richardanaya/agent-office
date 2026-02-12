@@ -1,6 +1,6 @@
 [package]
 name = "agent-office"
-version = "0.1.35"
+version = "0.1.36"
 edition = "2024"
 license = "MIT"
 description = "A Rust-based multi-agent system with graph-structured data storage, mail system, and Zettelkasten-style knowledge base"

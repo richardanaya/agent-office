@@ -945,7 +945,7 @@ async fn inbox_view(database_url: Option<String>, agent_id: String) -> Html<Stri
     // Mark All as Read button (only show if there are unread messages)
     let mark_all_button = if unread_count > 0 {
         format!(
-            r##"<button class="btn btn-sm btn-success" hx-post="/mail/inbox/{}/read-all" hx-target="#inbox-content" hx-swap="innerHTML">✓ Mark All as Read ({} unread)</button>"##,
+            r##"<button class="btn btn-sm btn-success" hx-post="/mail/inbox/{}/read-all" hx-target="#mail-list" hx-swap="innerHTML">✓ Mark All as Read ({} unread)</button>"##,
             agent_id, unread_count
         )
     } else {
@@ -954,7 +954,6 @@ async fn inbox_view(database_url: Option<String>, agent_id: String) -> Html<Stri
     
     let content = format!(
         r##"
-        <div id="inbox-content">
         <div class="back-link">
             <a href="/" class="btn btn-secondary btn-sm">&larr; Back to Dashboard</a>
         </div>
@@ -962,9 +961,8 @@ async fn inbox_view(database_url: Option<String>, agent_id: String) -> Html<Stri
             <h2>Inbox: {} <span class="section-count">{} messages</span></h2>
             {}
         </div>
-        <div class="mail-list">
+        <div id="mail-list" class="mail-list">
             {}
-        </div>
         </div>
         "##,
         agent_name,
@@ -1246,9 +1244,85 @@ async fn mark_all_mail_read(database_url: Option<String>, agent_id: String) -> H
     
     match result {
         Ok(_count) => {
-            // Return updated inbox view
-            inbox_view(database_url, agent_id).await
+            // Return just the mail list HTML (not the full page) for HTMX swap
+            inbox_mail_list(database_url, agent_id).await
         }
-        Err(_) => Html(templates::error_page("Failed to mark mail as read")),
+        Err(_) => Html("<div class='error'>Failed to mark mail as read</div>".to_string()),
     }
+}
+
+// Helper function to return just the mail list HTML (for HTMX updates)
+async fn inbox_mail_list(database_url: Option<String>, agent_id: String) -> Html<String> {
+    let inbox_mail = if let Some(url) = database_url {
+        let pool = match sqlx::postgres::PgPool::connect(&url).await {
+            Ok(p) => p,
+            Err(_) => return Html("<div class='error'>Database connection failed</div>".to_string()),
+        };
+        let storage = PostgresStorage::new(pool);
+        let service = MailServiceImpl::new(storage);
+        
+        match service.get_agent_mailbox(agent_id.clone()).await {
+            Ok(mailbox) => {
+                match service.get_mailbox_inbox(mailbox.id).await {
+                    Ok(mail) => mail,
+                    Err(_) => vec![],
+                }
+            }
+            Err(_) => vec![],
+        }
+    } else {
+        let storage = InMemoryStorage::new();
+        let service = MailServiceImpl::new(storage);
+        
+        match service.get_agent_mailbox(agent_id.clone()).await {
+            Ok(mailbox) => {
+                match service.get_mailbox_inbox(mailbox.id).await {
+                    Ok(mail) => mail,
+                    Err(_) => vec![],
+                }
+            }
+            Err(_) => vec![],
+        }
+    };
+    
+    let mail_html = inbox_mail.iter()
+        .map(|m| {
+            let status_class = if m.read { "read" } else { "unread" };
+            let mail_id_short = &m.id.to_string()[..8];
+            
+            let mark_read_button = if !m.read {
+                format!(
+                    r##"<button class="btn btn-sm btn-secondary" hx-post="/mail/{}/read" hx-target="#mail-{}" hx-swap="outerHTML">Mark as Read</button>"##,
+                    m.id, mail_id_short
+                )
+            } else {
+                String::new()
+            };
+            
+            let read_badge = if m.read { 
+                r#"<span class="badge badge-secondary">Read</span>"# 
+            } else { 
+                r#"<span class="badge badge-success">Unread</span>"# 
+            };
+            
+            format!(
+                r##"<div id="mail-{}" class="mail-card {}">
+                    <div class="mail-header">
+                        <span class="mail-subject">{}</span>
+                        <span class="mail-meta">{} {}</span>
+                    </div>
+                    <div class="mail-body">{}</div>
+                    <div class="mail-actions">{}</div>
+                </div>"##,
+                mail_id_short, status_class, m.subject, m.created_at.format("%Y-%m-%d %H:%M"), 
+                read_badge, m.body, mark_read_button
+            )
+        })
+        .collect::<String>();
+    
+    Html(if mail_html.is_empty() {
+        "<p class='empty-state'>No mail in inbox</p>".to_string()
+    } else {
+        mail_html
+    })
 }
