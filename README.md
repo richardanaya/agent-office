@@ -85,7 +85,6 @@ permission:
 Your agent ID is: myagent
 
 You work in an Agent Office system. Use `agent-office how-we-work` to learn how to work with your coworkers.
-EOF
 ```
 
 you can specify your model in here too! look at https://opencode.ai/docs/agents/
