@@ -36,15 +36,17 @@ agent-office how-we-work
 
 ## 🤖 Running AI Agents with opencode
 
-The `mail watch` command lets you automatically trigger an AI agent when new mail arrives:
+The `agent run` command lets you automatically trigger an AI agent when new mail arrives:
 
 ```bash
-# Watch for new mail and have opencode agent process it
-agent-office mail watch my-agent --bash 'opencode run --agent my-agent "read your mail"'
+# Run agent and have opencode process new mail when it arrives
+agent-office agent run my-agent 'opencode run --agent my-agent --session $AGENT_OFFICE_SESSION "read your mail"'
 
 # Check every 30 seconds (default is 60)
-agent-office mail watch my-agent -i 30 --bash 'opencode run --agent my-agent "check inbox and respond to urgent messages"'
+agent-office agent run my-agent 'opencode run --agent my-agent --session $AGENT_OFFICE_SESSION "check inbox and respond to urgent messages"' -i 30
 ```
+
+**Session Management:** When running an agent, the `AGENT_OFFICE_SESSION` environment variable is automatically set to `{agent_id}-session` (e.g., `my-agent-session`). This ensures consistent session tracking across multiple runs. The bash command can reference this variable using `$AGENT_OFFICE_SESSION`.
 
 **Agent Configuration:** Create your agent at `~/.config/opencode/agents/my-agent.md` with full permissions using YAML front matter:
 

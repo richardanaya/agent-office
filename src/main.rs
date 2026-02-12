@@ -314,79 +314,6 @@ async fn handle_mail_command(
                 println!("📭 Agent '{}' has no unread mail", agent_id);
             }
         }
-        MailCommands::Watch { agent_id, interval, bash } => {
-            use tokio::time::{sleep, Duration};
-            use std::process::Command;
-            
-            let _ = service.set_agent_status(agent_id.clone(), "online").await;
-            println!("Agent '{}' is now online", agent_id);
-            println!("Watching for new mail (checking every {} seconds)", interval);
-            println!("Press Ctrl+C to stop");
-            
-            let ctrl_c = tokio::signal::ctrl_c();
-            tokio::pin!(ctrl_c);
-            let interval_duration = Duration::from_secs(interval);
-            let immediate_check_duration = Duration::from_millis(100);
-            let mut running = true;
-            let mut check_immediately = true;
-            
-            while running {
-                let sleep_duration = if check_immediately {
-                    check_immediately = false;
-                    immediate_check_duration
-                } else {
-                    interval_duration
-                };
-                
-                tokio::select! {
-                    _ = &mut ctrl_c => {
-                        println!("\nStopping watch...");
-                        running = false;
-                    }
-                    _ = sleep(sleep_duration) => {
-                        let (has_unread, mails) = service.check_unread_mail(agent_id.clone()).await?;
-                        if has_unread {
-                            println!("\n📬 Found {} unread message(s)", mails.len());
-                            for mail in &mails {
-                                println!("  - {}", mail.subject);
-                            }
-                            println!("Executing: {}", bash);
-                            use std::process::Stdio;
-                            use std::io::{BufRead, BufReader};
-                            let mut child = Command::new("bash")
-                                .arg("-c")
-                                .arg(&bash)
-                                .stdout(Stdio::piped())
-                                .stderr(Stdio::piped())
-                                .spawn()
-                                .expect("Failed to execute bash command");
-                            if let Some(stdout) = child.stdout.take() {
-                                let reader = BufReader::new(stdout);
-                                for line in reader.lines() {
-                                    if let Ok(line) = line {
-                                        println!("{}", line);
-                                    }
-                                }
-                            }
-                            if let Some(stderr) = child.stderr.take() {
-                                let reader = BufReader::new(stderr);
-                                for line in reader.lines() {
-                                    if let Ok(line) = line {
-                                        eprintln!("{}", line);
-                                    }
-                                }
-                            }
-                            let _ = child.wait();
-                            println!("\n✓ Command completed - waiting for new messages...");
-                            check_immediately = true;
-                        }
-                    }
-                }
-            }
-            
-            let _ = service.set_agent_status(agent_id.clone(), "offline").await;
-            println!("Agent '{}' is now offline", agent_id);
-        }
         MailCommands::Search { agent_id, query } => {
             let mailbox = service.get_agent_mailbox(agent_id.clone()).await?;
             let inbox = service.get_mailbox_inbox(mailbox.id).await?;
@@ -473,6 +400,81 @@ async fn handle_agent_command(
         AgentCommands::Status { id, status } => {
             let agent = service.set_agent_status(id.clone(), status.clone()).await?;
             println!("Updated agent '{}' status to: {}", id, agent.status);
+        }
+        AgentCommands::Run { agent_id, bash, interval } => {
+            use tokio::time::{sleep, Duration};
+            use std::process::Command;
+            
+            let _ = service.set_agent_status(agent_id.clone(), "online").await;
+            println!("Agent '{}' is now online", agent_id);
+            println!("Watching for new mail (checking every {} seconds)", interval);
+            println!("Press Ctrl+C to stop");
+            
+            let ctrl_c = tokio::signal::ctrl_c();
+            tokio::pin!(ctrl_c);
+            let interval_duration = Duration::from_secs(interval);
+            let immediate_check_duration = Duration::from_millis(100);
+            let mut running = true;
+            let mut check_immediately = true;
+            
+            while running {
+                let sleep_duration = if check_immediately {
+                    check_immediately = false;
+                    immediate_check_duration
+                } else {
+                    interval_duration
+                };
+                
+                tokio::select! {
+                    _ = &mut ctrl_c => {
+                        println!("\nStopping watch...");
+                        running = false;
+                    }
+                    _ = sleep(sleep_duration) => {
+                        let (has_unread, mails) = service.check_unread_mail(agent_id.clone()).await?;
+                        if has_unread {
+                            println!("\n📬 Found {} unread message(s)", mails.len());
+                            for mail in &mails {
+                                println!("  - {}", mail.subject);
+                            }
+                            println!("Executing: {}", bash);
+                            use std::process::Stdio;
+                            use std::io::{BufRead, BufReader};
+                            let session_id = format!("{}-session", agent_id);
+                            let mut child = Command::new("bash")
+                                .arg("-c")
+                                .arg(&bash)
+                                .env("AGENT_OFFICE_SESSION", &session_id)
+                                .stdout(Stdio::piped())
+                                .stderr(Stdio::piped())
+                                .spawn()
+                                .expect("Failed to execute bash command");
+                            if let Some(stdout) = child.stdout.take() {
+                                let reader = BufReader::new(stdout);
+                                for line in reader.lines() {
+                                    if let Ok(line) = line {
+                                        println!("{}", line);
+                                    }
+                                }
+                            }
+                            if let Some(stderr) = child.stderr.take() {
+                                let reader = BufReader::new(stderr);
+                                for line in reader.lines() {
+                                    if let Ok(line) = line {
+                                        eprintln!("{}", line);
+                                    }
+                                }
+                            }
+                            let _ = child.wait();
+                            println!("\n✓ Command completed - waiting for new messages...");
+                            check_immediately = true;
+                        }
+                    }
+                }
+            }
+            
+            let _ = service.set_agent_status(agent_id.clone(), "offline").await;
+            println!("Agent '{}' is now offline", agent_id);
         }
     }
     Ok(())

@@ -82,17 +82,6 @@ pub enum MailCommands {
         /// Agent ID to check
         agent_id: String,
     },
-    /// Watch for new mail and execute command when unread mail arrives
-    Watch {
-        /// Agent ID to watch
-        agent_id: String,
-        /// Interval in seconds between checks
-        #[arg(short, long, default_value = "60")]
-        interval: u64,
-        /// Bash command to execute when unread mail is found
-        #[arg(short, long)]
-        bash: String,
-    },
     /// Search mail by subject or body content
     Search {
         /// Agent ID to search mail for
@@ -127,6 +116,16 @@ pub enum AgentCommands {
         id: String,
         #[arg(short, long)]
         status: String,
+    },
+    /// Run an agent in watch mode - continuously monitor for new mail and execute command when found
+    Run {
+        /// Agent ID to run
+        agent_id: String,
+        /// Bash command to execute when unread mail is found
+        bash: String,
+        /// Interval in seconds between checks
+        #[arg(short, long, default_value = "60")]
+        interval: u64,
     },
 }
 
