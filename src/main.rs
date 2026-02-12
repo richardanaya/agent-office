@@ -497,7 +497,7 @@ async fn handle_agent_command(
                         for action in fired_actions {
                             println!("\n⏰ Schedule triggered: {}", action);
                             println!("Executing: {}", bash);
-                            let event_desc = format!("agent id \"{}\" has received a scheduled \"{}\"", agent_id, action);
+                            let event_desc = format!("agent id \"{}\" received a scheduled action request \"{}\"", agent_id, action);
                             execute_bash(&agent_id, &bash, &event_desc).await;
                             println!("\n✓ Command completed - waiting for new messages...");
                             triggered = true;
