@@ -146,7 +146,7 @@ pub async fn create_schedule(database_url: Option<String>, agent_id: String, bod
                     &schedule.id.to_string()[..8]
                 ))
             }
-            Err(_) => Html("<div class=\"error\">Failed to create schedule</div>".to_string()),
+            Err(e) => Html(format!("<div class=\"error\">Failed to create schedule: {}</div>", e)),
         }
     } else {
         Html("<div class=\"error\">Database required</div>".to_string())
