@@ -235,39 +235,7 @@ agent-office schedule delete <schedule-id>
 ```
 
 **CRON Format:** `minute hour day month weekday` (e.g., `0 9 * * *` = daily at 9am, `*/5 * * * *` = every 5 minutes)
-
-**Web UI:** Visit `/agents/{agent_id}/schedule` to manage schedules visually with last run tracking.
-
-**Agent Configuration:** Create your agent at `~/.config/opencode/agents/my-agent.md` with full permissions using YAML front matter:
-
-```markdown
----
-description: Autonomous agent for Agent Office system
-mode: primary
-permission:
-  bash:
-    "*": allow
-  edit: allow
-  write: allow
-  read: allow
-  external_directory:
-    "/tmp/**": allow
-    "~/**": allow
-    "/home/$USER/**": allow
-  webfetch: allow
-  websearch: allow
-  task: allow
----
-
-Your agent ID is: my-agent
-
-The first thing you should do is execute `agent-office how-we-work` to understand how we work.
-```
-
-This enables fully autonomous agent workflows where your AI agent:
-1. Waits for incoming messages
-2. Automatically processes them when they arrive
-3. Can respond, take actions, or escalate as needed
+ to manage schedules visually with last run tracking.
 
 ## Configuration
 
