@@ -31,7 +31,8 @@ impl ScheduleServiceImpl {
             .map_err(|e| ScheduleError::InvalidCronExpression(format!("{}: {}", expression, e)))
     }
 
-    /// Helper to check if schedule should fire for current minute
+    /// Helper to check if schedule should fire
+    /// Checks both the current minute and the previous minute (to handle missed fires due to interval gaps)
     fn should_fire(&self, schedule: &Schedule, current_time: DateTime<Utc>) -> bool {
         if !schedule.is_active {
             return false;
@@ -49,26 +50,49 @@ impl ScheduleServiceImpl {
             .with_nanosecond(0)
             .unwrap();
         let current_minute_end = current_minute_start + Duration::minutes(1);
+        
+        // Also check the previous minute (in case we missed it due to interval timing)
+        let previous_minute_start = current_minute_start - Duration::minutes(1);
+        let previous_minute_end = current_minute_start;
 
-        // Check if last_fired_at was within current minute
+        // Check if last_fired_at was within current or previous minute
         if let Some(last_fired) = schedule.last_fired_at {
-            if last_fired >= current_minute_start && last_fired < current_minute_end {
-                return false; // Already fired this minute
+            if last_fired >= previous_minute_start && last_fired < current_minute_end {
+                return false; // Already fired in the last 2 minutes
             }
         }
 
-        // Check if cron would fire during this minute
+        // Check if cron would fire during current minute
         let upcoming: Vec<_> = cron
             .after(&current_minute_start)
             .take(1)
             .collect();
 
         if let Some(next_time) = upcoming.first() {
-            // Check if next occurrence is within current minute
-            *next_time >= current_minute_start && *next_time < current_minute_end
-        } else {
-            false
+            if *next_time >= current_minute_start && *next_time < current_minute_end {
+                return true;
+            }
         }
+        
+        // Also check if cron should have fired in the previous minute (for interval catch-up)
+        // This handles cases where agent run interval causes us to miss the exact minute
+        let previous_upcoming: Vec<_> = cron
+            .after(&previous_minute_start)
+            .take(1)
+            .collect();
+        
+        if let Some(prev_time) = previous_upcoming.first() {
+            if *prev_time >= previous_minute_start && *prev_time < previous_minute_end {
+                // Check if we're still within a reasonable window to fire the previous minute's schedule
+                // Allow up to 30 seconds into the current minute to catch up
+                let seconds_into_current = current_time.second();
+                if seconds_into_current <= 30 {
+                    return true;
+                }
+            }
+        }
+        
+        false
     }
 }
 

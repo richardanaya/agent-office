@@ -126,8 +126,8 @@ pub enum AgentCommands {
         agent_id: String,
         /// Bash command to execute when unread mail is found
         bash: String,
-        /// Interval in seconds between checks
-        #[arg(short, long, default_value = "60")]
+        /// Interval in seconds between checks (default: 10 for reliable schedule catching)
+        #[arg(short, long, default_value = "10")]
         interval: u64,
     },
 }

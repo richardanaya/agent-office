@@ -44,8 +44,9 @@ The `agent run` command continuously monitors for new mail and scheduled tasks, 
 # Note: Use single quotes to prevent shell from expanding $AGENT_OFFICE_SESSION
 agent-office agent run my-agent 'opencode run --agent my-agent --session $AGENT_OFFICE_SESSION "read your mail"'
 
-# Check every 30 seconds (default is 60)
-agent-office agent run my-agent 'opencode run --agent my-agent --session $AGENT_OFFICE_SESSION "check inbox and respond to urgent messages"' -i 30
+# Default check interval is 10 seconds for reliable schedule catching
+# You can customize it with -i flag:
+agent-office agent run my-agent 'opencode run --agent my-agent --session $AGENT_OFFICE_SESSION "check inbox"' -i 60
 
 # Test the session variable
 agent-office agent run coordinator 'echo $AGENT_OFFICE_SESSION'
