@@ -1748,6 +1748,110 @@ textarea.form-control {
     border-radius: 8px;
 }
 
+/* --- Enhanced Schedule Cards --- */
+.schedules-container {
+    display: grid;
+    gap: 20px;
+    margin-bottom: 32px;
+}
+
+.schedule-card {
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+}
+
+.schedule-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.schedule-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.schedule-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.schedule-body {
+    display: grid;
+    gap: 12px;
+}
+
+.schedule-detail {
+    font-size: 14px;
+}
+
+.schedule-detail strong {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--color-text-muted);
+}
+
+.schedule-action-text {
+    background: var(--color-bg);
+    padding: 12px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.schedule-edit-form {
+    margin-top: 16px;
+    padding: 16px;
+    background: var(--color-bg);
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+}
+
+.schedule-edit-form .form-group {
+    margin-bottom: 12px;
+}
+
+.schedule-edit-form label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 4px;
+    color: var(--color-text);
+}
+
+.schedule-edit-form input,
+.schedule-edit-form textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+    border: none;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+}
+
 "##;
 
 pub fn wrap_content(content: impl AsRef<str>) -> String {

@@ -29,6 +29,3 @@ impl Schedule {
         }
     }
 }
-
-#[derive(Debug, Clone)]
-pub struct ScheduleId(pub Uuid);

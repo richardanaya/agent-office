@@ -19,9 +19,6 @@ pub enum ScheduleError {
 
     #[error("Storage error: {0}")]
     Storage(String),
-
-    #[error("Invalid schedule ID: {0}")]
-    InvalidScheduleId(String),
 }
 
 pub type Result<T> = std::result::Result<T, ScheduleError>;

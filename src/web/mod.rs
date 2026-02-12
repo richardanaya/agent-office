@@ -8,7 +8,7 @@ use std::net::SocketAddr;
 
 pub mod templates;
 mod schedules;
-use schedules::{agent_schedule_view, create_schedule, toggle_schedule};
+use schedules::{agent_schedule_view, create_schedule, update_schedule, delete_schedule, toggle_schedule};
 
 use crate::services::mail::{MailService, MailServiceImpl};
 use crate::services::kb::{KnowledgeBaseService, KnowledgeBaseServiceImpl};
@@ -144,6 +144,14 @@ fn create_router(database_url: Option<String>) -> Router {
         .route("/schedules/{schedule_id}/toggle", post({
             let db = db_url11.clone();
             move |Path(schedule_id): Path<String>| toggle_schedule((*db).clone(), schedule_id)
+        }))
+        .route("/schedules/{schedule_id}/update", post({
+            let db = db_url11.clone();
+            move |Path(schedule_id): Path<String>, body: axum::body::Bytes| update_schedule((*db).clone(), schedule_id, body)
+        }))
+        .route("/schedules/{schedule_id}/delete", post({
+            let db = db_url11.clone();
+            move |Path(schedule_id): Path<String>| delete_schedule((*db).clone(), schedule_id)
         }))
         
         // KB - Knowledge Base

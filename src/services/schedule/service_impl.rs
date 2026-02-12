@@ -18,8 +18,16 @@ impl ScheduleServiceImpl {
     }
 
     /// Helper to validate cron expression
+    /// Supports both 5-field (standard) and 6-field (with seconds) formats
     fn validate_cron(&self, expression: &str) -> Result<CronSchedule> {
-        CronSchedule::from_str(expression)
+        // First try the expression as-is
+        if let Ok(schedule) = CronSchedule::from_str(expression) {
+            return Ok(schedule);
+        }
+        
+        // If that fails, try prepending "0 " for seconds (convert 5-field to 6-field)
+        let with_seconds = format!("0 {}", expression);
+        CronSchedule::from_str(&with_seconds)
             .map_err(|e| ScheduleError::InvalidCronExpression(format!("{}: {}", expression, e)))
     }
 

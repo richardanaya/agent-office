@@ -7,8 +7,8 @@ use crate::web::templates;
 
 // View agent schedules
 pub async fn agent_schedule_view(database_url: Option<String>, agent_id: String) -> Html<String> {
-    let (agent, schedules) = if let Some(url) = database_url {
-        let pool = match sqlx::postgres::PgPool::connect(&url).await {
+    let (agent, schedules, schedule_service_opt) = if let Some(ref url) = database_url {
+        let pool = match sqlx::postgres::PgPool::connect(url).await {
             Ok(p) => p,
             Err(_) => return Html(templates::error_page("Failed to connect to database")),
         };
@@ -25,14 +25,15 @@ pub async fn agent_schedule_view(database_url: Option<String>, agent_id: String)
             Err(_) => vec![],
         };
         
-        (agent, schedules)
+        (agent, schedules, Some(schedule_service))
     } else {
         return Html(templates::error_page("Database connection required"));
     };
     
-    // Build schedule list HTML
+    let current_time = chrono::Utc::now();
+    
+    // Build schedule list HTML with full details
     let mut schedules_html = String::new();
-    let _schedule_count = schedules.len();
     for schedule in &schedules {
         let status_badge = if schedule.is_active {
             "<span class=\"badge badge-success\">Active</span>"
@@ -41,37 +42,94 @@ pub async fn agent_schedule_view(database_url: Option<String>, agent_id: String)
         };
         
         let last_fired = schedule.last_fired_at
-            .map(|t| format!("Last: {}", t.format("%Y-%m-%d %H:%M")))
+            .map(|t| format!("Last fired: {}", t.format("%Y-%m-%d %H:%M UTC")))
             .unwrap_or_else(|| "Never fired".to_string());
         
-        let action_preview = if schedule.action.len() > 50 {
-            format!("{}...", &schedule.action[..50])
+        // Calculate next run time
+        let next_run = if schedule.is_active {
+            if let Some(ref service) = schedule_service_opt {
+                service.get_next_run(schedule, current_time)
+                    .map(|t| format!("Next: {}", t.format("%Y-%m-%d %H:%M UTC")))
+                    .unwrap_or_else(|| "No upcoming runs".to_string())
+            } else {
+                "Unable to calculate".to_string()
+            }
         } else {
-            schedule.action.clone()
+            "Inactive - no upcoming runs".to_string()
         };
         
-        let schedule_id_short = &schedule.id.to_string()[..8];
+        let schedule_id_full = schedule.id.to_string();
+        let schedule_id_short = &schedule_id_full[..8];
         
-        schedules_html.push_str("<div class=\"schedule-item\">");
-        schedules_html.push_str("<div class=\"schedule-header\">");
+        // Full action text (not truncated)
+        let action_escaped = html_escape(&schedule.action);
+        
+        schedules_html.push_str("<div class=\"schedule-card\">");
+        schedules_html.push_str("<div class=\"schedule-card-header\">");
         schedules_html.push_str(&format!(
-            "<span class=\"schedule-cron\">{}</span> {} ",
+            "<div class=\"schedule-title\"><span class=\"schedule-cron\">{}</span> {}</div>",
             html_escape(&schedule.cron_expression),
             status_badge
         ));
+        schedules_html.push_str("<div class=\"schedule-actions\">");
         schedules_html.push_str(&format!(
-            "<button class=\"btn btn-sm btn-secondary\" hx-post=\"/schedules/{}/toggle\" hx-target=\"#schedules-list\" hx-swap=\"innerHTML\">Toggle</button>",
+            "<button class=\"btn btn-sm btn-secondary\" onclick=\"toggleEditForm('{}')\">Edit</button>",
+            schedule_id_short
+        ));
+        schedules_html.push_str(&format!(
+            "<button class=\"btn btn-sm btn-danger\" hx-post=\"/schedules/{}/delete\" hx-confirm=\"Delete this schedule?\" hx-target=\"#schedules-list\" hx-swap=\"innerHTML\">Delete</button>",
             schedule.id
         ));
+        schedules_html.push_str(&format!(
+            "<button class=\"btn btn-sm btn-secondary\" hx-post=\"/schedules/{}/toggle\" hx-target=\"#schedules-list\" hx-swap=\"innerHTML\">{}</button>",
+            schedule.id,
+            if schedule.is_active { "Disable" } else { "Enable" }
+        ));
         schedules_html.push_str("</div>");
+        schedules_html.push_str("</div>");
+        
+        schedules_html.push_str("<div class=\"schedule-body\">");
         schedules_html.push_str(&format!(
-            "<div class=\"schedule-action\">{}</div>",
-            html_escape(&action_preview)
+            "<div class=\"schedule-detail\"><strong>Action:</strong><pre class=\"schedule-action-text\">{}</pre></div>",
+            action_escaped
         ));
         schedules_html.push_str(&format!(
-            "<div class=\"schedule-meta\">{} &middot; ID: {}</div>",
-            last_fired, schedule_id_short
+            "<div class=\"schedule-meta\">{}<br>{}<br>ID: {}</div>",
+            last_fired, next_run, schedule_id_short
         ));
+        schedules_html.push_str("</div>");
+        
+        // Hidden edit form
+        schedules_html.push_str(&format!(
+            "<div id=\"edit-form-{}\" class=\"schedule-edit-form\" style=\"display:none;\">",
+            schedule_id_short
+        ));
+        schedules_html.push_str(&format!(
+            "<form hx-post=\"/schedules/{}/update\" hx-target=\"#schedules-list\" hx-swap=\"innerHTML\">",
+            schedule.id
+        ));
+        schedules_html.push_str("<div class=\"form-group\">");
+        schedules_html.push_str("<label>CRON Expression</label>");
+        schedules_html.push_str(&format!(
+            "<input type=\"text\" name=\"cron\" value=\"{}\" required>",
+            html_escape(&schedule.cron_expression)
+        ));
+        schedules_html.push_str("</div>");
+        schedules_html.push_str("<div class=\"form-group\">");
+        schedules_html.push_str("<label>Action</label>");
+        schedules_html.push_str(&format!(
+            "<textarea name=\"action\" rows=\"3\" required>{}</textarea>",
+            action_escaped
+        ));
+        schedules_html.push_str("</div>");
+        schedules_html.push_str("<button type=\"submit\" class=\"btn btn-success\">Save Changes</button>");
+        schedules_html.push_str(&format!(
+            "<button type=\"button\" class=\"btn btn-secondary\" onclick=\"toggleEditForm('{}')\">Cancel</button>",
+            schedule_id_short
+        ));
+        schedules_html.push_str("</form>");
+        schedules_html.push_str("</div>");
+        
         schedules_html.push_str("</div>");
     }
     
@@ -88,9 +146,24 @@ pub async fn agent_schedule_view(database_url: Option<String>, agent_id: String)
         html_escape(&agent.name),
         schedules.len()
     ));
-    content.push_str("<div id=\"schedules-list\" class=\"schedules-list\">");
+    content.push_str("<div id=\"schedules-list\" class=\"schedules-container\">");
     content.push_str(&schedules_html);
     content.push_str("</div>");
+    
+    // Add JavaScript for edit form toggle
+    content.push_str(r#"
+<script>
+function toggleEditForm(id) {
+    const form = document.getElementById('edit-form-' + id);
+    if (form.style.display === 'none') {
+        form.style.display = 'block';
+    } else {
+        form.style.display = 'none';
+    }
+}
+</script>
+"#);
+    
     content.push_str("<h3>Create New Schedule</h3>");
     content.push_str(&format!(
         "<form class=\"schedule-form\" hx-post=\"/agents/{}/schedule\" hx-target=\"#schedules-list\" hx-swap=\"innerHTML\">",
@@ -98,8 +171,8 @@ pub async fn agent_schedule_view(database_url: Option<String>, agent_id: String)
     ));
     content.push_str("<div class=\"form-group\">");
     content.push_str("<label>CRON Expression</label>");
-    content.push_str("<input type=\"text\" name=\"cron\" placeholder=\"0 9 * * * (daily at 9am)\" required>");
-    content.push_str("<small>Format: minute hour day month weekday (e.g., */5 * * * * for every 5 minutes)</small>");
+    content.push_str("<input type=\"text\" name=\"cron\" placeholder=\"* * * * * (every minute) or 0 9 * * * (daily at 9am)\" required>");
+    content.push_str("<small>Format: minute hour day month weekday (5 fields) OR seconds minute hour day month weekday (6 fields)</small>");
     content.push_str("</div>");
     content.push_str("<div class=\"form-group\">");
     content.push_str("<label>Action</label>");
@@ -113,7 +186,6 @@ pub async fn agent_schedule_view(database_url: Option<String>, agent_id: String)
 
 // Create new schedule via web form
 pub async fn create_schedule(database_url: Option<String>, agent_id: String, body: axum::body::Bytes) -> Html<String> {
-    // Parse form data
     let body_str = String::from_utf8_lossy(&body);
     let params: std::collections::HashMap<String, String> = body_str
         .split('&')
@@ -128,7 +200,6 @@ pub async fn create_schedule(database_url: Option<String>, agent_id: String, bod
     let cron = params.get("cron").cloned().unwrap_or_default();
     let action = params.get("action").cloned().unwrap_or_default();
     
-    // URL decode
     let cron = urldecode(&cron);
     let action = urldecode(&action);
     
@@ -140,13 +211,83 @@ pub async fn create_schedule(database_url: Option<String>, agent_id: String, bod
         let schedule_service = ScheduleServiceImpl::new(pool);
         
         match schedule_service.create_schedule(agent_id.clone(), cron, action).await {
-            Ok(schedule) => {
-                Html(format!(
-                    "<div class=\"success\">Schedule created: {}</div>",
-                    &schedule.id.to_string()[..8]
-                ))
-            }
+            Ok(_) => agent_schedule_view(Some(url), agent_id).await,
             Err(e) => Html(format!("<div class=\"error\">Failed to create schedule: {}</div>", e)),
+        }
+    } else {
+        Html("<div class=\"error\">Database required</div>".to_string())
+    }
+}
+
+// Update schedule
+pub async fn update_schedule(database_url: Option<String>, schedule_id: String, body: axum::body::Bytes) -> Html<String> {
+    let id = match uuid::Uuid::parse_str(&schedule_id) {
+        Ok(u) => u,
+        Err(_) => return Html("<div class=\"error\">Invalid schedule ID</div>".to_string()),
+    };
+    
+    let body_str = String::from_utf8_lossy(&body);
+    let params: std::collections::HashMap<String, String> = body_str
+        .split('&')
+        .filter_map(|pair| {
+            let mut parts = pair.splitn(2, '=');
+            let key = parts.next()?.to_string();
+            let value = parts.next().unwrap_or("").to_string();
+            Some((key, value))
+        })
+        .collect();
+    
+    let cron = params.get("cron").cloned();
+    let action = params.get("action").cloned();
+    
+    let cron = cron.map(|c| urldecode(&c));
+    let action = action.map(|a| urldecode(&a));
+    
+    if let Some(url) = database_url {
+        let pool = match sqlx::postgres::PgPool::connect(&url).await {
+            Ok(p) => p,
+            Err(_) => return Html("<div class=\"error\">Failed to connect to database</div>".to_string()),
+        };
+        let schedule_service = ScheduleServiceImpl::new(pool);
+        
+        // Get agent_id for redirect
+        let agent_id = match schedule_service.get_schedule(id).await {
+            Ok(s) => s.agent_id,
+            Err(_) => return Html("<div class=\"error\">Schedule not found</div>".to_string()),
+        };
+        
+        match schedule_service.update_schedule(id, cron, action).await {
+            Ok(_) => agent_schedule_view(Some(url), agent_id).await,
+            Err(e) => Html(format!("<div class=\"error\">Failed to update schedule: {}</div>", e)),
+        }
+    } else {
+        Html("<div class=\"error\">Database required</div>".to_string())
+    }
+}
+
+// Delete schedule
+pub async fn delete_schedule(database_url: Option<String>, schedule_id: String) -> Html<String> {
+    let id = match uuid::Uuid::parse_str(&schedule_id) {
+        Ok(u) => u,
+        Err(_) => return Html("<div class=\"error\">Invalid schedule ID</div>".to_string()),
+    };
+    
+    if let Some(url) = database_url {
+        let pool = match sqlx::postgres::PgPool::connect(&url).await {
+            Ok(p) => p,
+            Err(_) => return Html("<div class=\"error\">Failed to connect to database</div>".to_string()),
+        };
+        let schedule_service = ScheduleServiceImpl::new(pool);
+        
+        // Get agent_id before deleting
+        let agent_id = match schedule_service.get_schedule(id).await {
+            Ok(s) => s.agent_id,
+            Err(_) => return Html("<div class=\"error\">Schedule not found</div>".to_string()),
+        };
+        
+        match schedule_service.delete_schedule(id).await {
+            Ok(_) => agent_schedule_view(Some(url), agent_id).await,
+            Err(e) => Html(format!("<div class=\"error\">Failed to delete schedule: {}</div>", e)),
         }
     } else {
         Html("<div class=\"error\">Database required</div>".to_string())
@@ -174,18 +315,15 @@ pub async fn toggle_schedule(database_url: Option<String>, schedule_id: String) 
         };
         
         match schedule_service.toggle_schedule(id).await {
-            Ok(_) => {
-                // Return updated schedule list
-                agent_schedule_view(Some(url), agent_id).await
-            }
-            Err(_) => Html("<div class=\"error\">Failed to toggle schedule</div>".to_string()),
+            Ok(_) => agent_schedule_view(Some(url), agent_id).await,
+            Err(e) => Html(format!("<div class=\"error\">Failed to toggle schedule: {}</div>", e)),
         }
     } else {
         Html("<div class=\"error\">Database required</div>".to_string())
     }
 }
 
-// Simple URL decode function - handles basic percent encoding
+// Simple URL decode function
 fn urldecode(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     let chars: Vec<char> = s.chars().collect();
