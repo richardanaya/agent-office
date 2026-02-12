@@ -2,14 +2,15 @@
   <img width="300" height="300" alt="image" src="https://github.com/user-attachments/assets/33bbbd56-512c-4f9d-9d18-de5fb6dcfbe1" />
 </p>
 
-A Rust-based multi-agent system featuring a mail system and Zettelkasten-style knowledge base with Markdown support.
+A Rust-based multi-agent system featuring a mail system, CRON schedules, and Zettelkasten-style knowledge base with Markdown support.
 
 ## Features
 - **Runs on PostgreSQL**: the best db ;)
 - **Multi-Agent System**: Create and manage agents with status tracking
 - **Mail System**: Agents can send and receive messages via mailboxes
+- **CRON Schedules**: Schedule recurring tasks with automatic triggering
 - **Knowledge Base**: Zettelkasten-style notes with Markdown support and Luhmann addressing (1, 1a, 1a1)
-- **Web Interface**: HTMX-based UI for browsing agents, mail, and knowledge base
+- **Web Interface**: HTMX-based UI for browsing agents, mail, schedules, and knowledge base
 - **Onboarding**: Built-in guide for new AI agents with `how-we-work` command
 
 ## Quick Start
@@ -36,10 +37,10 @@ agent-office how-we-work
 
 ## 🤖 Running AI Agents with opencode
 
-The `agent run` command lets you automatically trigger an AI agent when new mail arrives:
+The `agent run` command continuously monitors for new mail and scheduled tasks, automatically triggering your AI agent when either occurs:
 
 ```bash
-# Run agent and have opencode process new mail when it arrives
+# Run agent and have opencode process events (mail or schedules) when they occur
 # Note: Use single quotes to prevent shell from expanding $AGENT_OFFICE_SESSION
 agent-office agent run my-agent 'opencode run --agent my-agent --session $AGENT_OFFICE_SESSION "read your mail"'
 
@@ -53,9 +54,42 @@ agent-office agent run coordinator 'echo $AGENT_OFFICE_SESSION'
 **Environment Variables:** When the bash command is executed, two environment variables are set:
 
 - `AGENT_OFFICE_SESSION`: Set to `{agent_id}-session` (e.g., `my-agent-session`) for consistent session tracking
-- `AGENT_OFFICE_EVENT`: A description of what triggered the execution (e.g., `agent id "my-agent" has unread mail`)
+- `AGENT_OFFICE_EVENT`: A description of what triggered the execution:
+  - For mail: `agent id "my-agent" has unread mail`
+  - For schedules: `agent id "my-agent" received a scheduled action request "action description"`
 
 **Important:** Always use **single quotes** around the bash command to prevent your shell from expanding environment variables before they reach the agent.
+
+## ⏰ Managing Schedules
+
+CRON schedules allow agents to be automatically triggered at specific times (e.g., daily reports, periodic health checks):
+
+```bash
+# Create a daily schedule for an agent
+agent-office schedule create my-agent "0 9 * * *" "Generate daily summary report"
+
+# Create a schedule that fires every 5 minutes
+agent-office schedule create my-agent "*/5 * * * *" "Check system status"
+
+# List all schedules for an agent
+agent-office schedule list my-agent
+
+# Get details of a specific schedule
+agent-office schedule get <schedule-id>
+
+# Update a schedule (change CRON or action)
+agent-office schedule update <schedule-id> --cron "0 10 * * *" --action "New action"
+
+# Toggle schedule on/off
+agent-office schedule toggle <schedule-id>
+
+# Delete a schedule
+agent-office schedule delete <schedule-id>
+```
+
+**CRON Format:** `minute hour day month weekday` (e.g., `0 9 * * *` = daily at 9am, `*/5 * * * *` = every 5 minutes)
+
+**Web UI:** Visit `/agents/{agent_id}/schedule` to manage schedules visually with last run tracking.
 
 **Agent Configuration:** Create your agent at `~/.config/opencode/agents/my-agent.md` with full permissions using YAML front matter:
 
@@ -174,6 +208,7 @@ Commands:
 Visit `http://127.0.0.1:8080` to:
 - View all agents and their status
 - Browse agent inboxes and outboxes with message subjects
+- Manage CRON schedules for each agent with last run tracking
 - Browse the knowledge base with Markdown rendering
 - Set agents offline with one click
 - Mobile-friendly responsive design
