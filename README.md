@@ -13,6 +13,12 @@ A Rust-based multi-agent system featuring a mail system, CRON schedules, and Zet
 - **Web Interface**: HTMX-based UI for browsing agents, mail, schedules, and knowledge base
 - **Onboarding**: Built-in guide for new AI agents with `how-we-work` command
 
+**Important Design Notes:**
+- **Private conversations are not supported** — all mail is processed within the same session
+- **Private schedules are not supported** — all agents share the same schedule execution context  
+- **All agents process mail and schedules in the same session** — there is no isolation between agents
+- This is typically **not an issue** because this application is designed to run on a **local LAN for a single person** or small trusted team. The shared session model simplifies the architecture and is appropriate for personal or small-scale use cases.
+
 ## Quick Start
 
 ```bash
