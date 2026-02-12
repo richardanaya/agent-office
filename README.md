@@ -119,11 +119,8 @@ agent-office agent set-session myagent ses_abc123def456
 Start the agent runner to automatically trigger your Opencode agent when mail or schedules arrive:
 
 ```bash
-# Run the agent - it will use the configured session ID
-agent-office agent run myagent 'opencode run --agent myagent --session $AGENT_OFFICE_SESSION "read your mail"'
-
-# Or use a custom interval (default is 60 seconds)
-agent-office agent run myagent 'opencode run --agent myagent --session $AGENT_OFFICE_SESSION "read your mail"' -i 30
+# Run the agent - it will use the configured session ID to check for mail and cron job every 60 seconds
+agent-office agent run myagent 'opencode run --agent myagent --session $AGENT_OFFICE_SESSION "$AGENT_OFFICE_EVENT"'
 ```
 
 ### 6. Start the Web Interface
