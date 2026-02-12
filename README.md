@@ -17,7 +17,8 @@ A Rust-based multi-agent system featuring a mail system, CRON schedules, and Zet
 - **Private conversations are not supported** — all mail is processed within the same session
 - **Private schedules are not supported** — all agents share the same schedule execution context  
 - **All agents process mail and schedules in the same session** — there is no isolation between agents
-- This is typically **not an issue** because this application is designed to run on a **local LAN for a single person** or small trusted team. The shared session model simplifies the architecture and is appropriate for personal or small-scale use cases.
+- **No authentication or authorization** — the web interface is wide open; any user can send messages to any agent, view all mail, and manage all schedules
+- This is typically **not an issue** because this application is designed to run on a **local LAN for a single person** or small trusted team. The shared session model and lack of access controls simplify the architecture and are appropriate for personal or small-scale use cases.
 
 ## Quick Start
 
