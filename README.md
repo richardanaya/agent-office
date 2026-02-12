@@ -92,12 +92,12 @@ EOF
 
 Start Opencode with your agent and note the session ID:
 
-```bash
-# Start opencode in background or another terminal
-opencode run --agent myagent
+`bash
+# Start opencode in the folder you want it to run
+opencode run --print-logs --agent myagent "Test" 2>&1 | grep sessionID
 
 # The session ID will be displayed (e.g., ses_abc123def456)
-# Note this down - you'll need it for the next step
+# Note this down - you'll need it for the next step  and ctr + C
 ```
 
 ### 4. Register the Agent in Agent Office
