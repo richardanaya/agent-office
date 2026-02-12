@@ -1,6 +1,6 @@
 <p align="center">
-  <img width="300" height="300" alt="image" src="https://github.com/user-attachments/assets/33bbbd56-512c-4f9d-9d18-de5fb6dcfbe1" />
-</p>
+  <img width="300" height="300" alt="image" src="https://github.com/user-attachments/assets/2863b6cf-d5a6-4d6c-86e2-c0da9e46ea4e" />
+</p
 
 A Rust-based multi-agent system featuring a mail system, CRON schedules, and Zettelkasten-style knowledge base with Markdown support.
 
