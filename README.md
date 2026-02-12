@@ -92,7 +92,7 @@ EOF
 
 Start Opencode with your agent and note the session ID:
 
-`bash
+```bash
 # Start opencode in the folder you want it to run
 opencode run --print-logs --agent myagent "Test" 2>&1 | grep sessionID
 
