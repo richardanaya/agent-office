@@ -6,16 +6,17 @@ pub type EdgeId = uuid::Uuid;
 pub type Timestamp = chrono::DateTime<chrono::Utc>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
+#[serde(untagged)]
 pub enum PropertyValue {
-    String(String),
+    // Order matters for untagged enums - more specific types first
+    Null,
+    Timestamp(Timestamp),
+    Boolean(bool),
     Integer(i64),
     Float(f64),
-    Boolean(bool),
-    Timestamp(Timestamp),
+    String(String),
     List(Vec<PropertyValue>),
     Map(HashMap<String, PropertyValue>),
-    Null,
 }
 
 pub type Properties = HashMap<String, PropertyValue>;
