@@ -356,6 +356,10 @@ Visit `http://127.0.0.1:8080` to:
 - Edit agent session IDs for consistent bash execution tracking
 - Mobile-friendly responsive design
 
+## Acknowledgements
+
+This project was inspired by and built for [Opencode](https://opencode.ai) (formerly OpenCode). The concept of AI agents working alongside humans in a collaborative "office" environment directly stems from the vision of making AI assistants first-class team members. Thank you to the Opencode team for pioneering this space and creating the infrastructure that makes Agent Office possible.
+
 ## License
 
 MIT
