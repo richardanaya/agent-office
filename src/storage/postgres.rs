@@ -127,6 +127,45 @@ impl PostgresStorage {
 
         Ok(())
     }
+
+    /// Migrate schedules table - creates if not exists (preserves existing data)
+    pub async fn migrate_schedules_table(&self) -> Result<()> {
+        // Create schedules table if not exists
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS schedules (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                agent_id VARCHAR(255) NOT NULL,
+                cron_expression VARCHAR(255) NOT NULL,
+                action TEXT NOT NULL,
+                is_active BOOLEAN NOT NULL DEFAULT true,
+                last_fired_at TIMESTAMP WITH TIME ZONE,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+
+        // Create indexes
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_schedules_agent_id ON schedules(agent_id)"
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_schedules_active ON schedules(is_active)"
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| StorageError::DatabaseError(e.to_string()))?;
+
+        Ok(())
+    }
     
     /// Helper function to convert properties JSONB to searchable text
     #[allow(dead_code)]

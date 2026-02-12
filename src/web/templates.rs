@@ -1631,6 +1631,122 @@ textarea.form-control {
     }
 }
 
+/* --- Schedule Management --- */
+.schedules-list {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+.schedule-item {
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: var(--shadow-sm);
+}
+
+.schedule-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.schedule-cron {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-primary);
+    background: var(--color-bg);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.schedule-action {
+    font-size: 14px;
+    color: var(--color-text);
+    margin: 8px 0;
+    line-height: 1.5;
+}
+
+.schedule-meta {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+}
+
+.schedule-form {
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 24px;
+    max-width: 600px;
+}
+
+.schedule-form .form-group {
+    margin-bottom: 16px;
+}
+
+.schedule-form label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: var(--color-text);
+}
+
+.schedule-form input,
+.schedule-form textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.schedule-form input:focus,
+.schedule-form textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+.schedule-form small {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.badge-success {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--color-success);
+}
+
+.badge-secondary {
+    background: var(--color-bg);
+    color: var(--color-text-muted);
+}
+
+.empty-state {
+    color: var(--color-text-muted);
+    font-style: italic;
+    padding: 24px;
+    text-align: center;
+    background: var(--color-bg);
+    border-radius: 8px;
+}
+
 "##;
 
 pub fn wrap_content(content: impl AsRef<str>) -> String {

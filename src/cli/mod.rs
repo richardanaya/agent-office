@@ -20,6 +20,9 @@ pub enum Commands {
     /// A Zettelkasten knowledge base with Markdown support for all coworkers to share
     #[command(subcommand)]
     Kb(KbCommands),
+    /// Manage scheduled tasks for agents
+    #[command(subcommand)]
+    Schedule(ScheduleCommands),
     /// Human-only tools (not for AI agents)
     #[command(subcommand)]
     Human(HumanCommands),
@@ -217,5 +220,49 @@ pub enum KbCommands {
     Delete {
         /// Luhmann ID of the note to delete
         luhmann_id: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ScheduleCommands {
+    /// Create a new schedule for an agent
+    Create {
+        /// Agent ID to create schedule for
+        agent_id: String,
+        /// CRON expression (e.g., "0 9 * * *" for 9am daily, "*/5 * * * *" for every 5 minutes)
+        cron: String,
+        /// Action description - what the agent should do when schedule fires (can include markdown)
+        action: String,
+    },
+    /// List all schedules for an agent
+    List {
+        /// Agent ID to list schedules for
+        agent_id: String,
+    },
+    /// Get a specific schedule
+    Get {
+        /// Schedule ID (full UUID)
+        schedule_id: String,
+    },
+    /// Update a schedule
+    Update {
+        /// Schedule ID to update
+        schedule_id: String,
+        /// New CRON expression
+        #[arg(short, long)]
+        cron: Option<String>,
+        /// New action description
+        #[arg(short, long)]
+        action: Option<String>,
+    },
+    /// Delete a schedule
+    Delete {
+        /// Schedule ID to delete
+        schedule_id: String,
+    },
+    /// Toggle schedule on/off
+    Toggle {
+        /// Schedule ID to toggle
+        schedule_id: String,
     },
 }

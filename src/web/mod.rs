@@ -7,10 +7,13 @@ use axum::{
 use std::net::SocketAddr;
 
 pub mod templates;
+mod schedules;
+use schedules::{agent_schedule_view, create_schedule, toggle_schedule};
 
 use crate::services::mail::{MailService, MailServiceImpl};
 use crate::services::kb::{KnowledgeBaseService, KnowledgeBaseServiceImpl};
 use crate::services::kb::domain::LuhmannId;
+// Schedule handlers are in schedules module
 use crate::storage::{memory::InMemoryStorage, postgres::PostgresStorage};
 
 /// Render markdown content to HTML using pulldown-cmark.
@@ -88,6 +91,9 @@ fn create_router(database_url: Option<String>) -> Router {
     let db_url6 = Arc::new(database_url.clone());
     let db_url7 = Arc::new(database_url.clone());
     let db_url8 = Arc::new(database_url.clone());
+    let db_url9 = Arc::new(database_url.clone());
+    let db_url10 = Arc::new(database_url.clone());
+    let db_url11 = Arc::new(database_url.clone());
     
     Router::new()
         // Dashboard / Home
@@ -124,6 +130,20 @@ fn create_router(database_url: Option<String>) -> Router {
         .route("/mail/send", post({
             let db = db_url7.clone();
             move |body: axum::body::Bytes| send_mail((*db).clone(), body)
+        }))
+        
+        // Schedule management
+        .route("/agents/{agent_id}/schedule", get({
+            let db = db_url9.clone();
+            move |Path(agent_id): Path<String>| agent_schedule_view((*db).clone(), agent_id)
+        }))
+        .route("/agents/{agent_id}/schedule", post({
+            let db = db_url10.clone();
+            move |Path(agent_id): Path<String>, body: axum::body::Bytes| create_schedule((*db).clone(), agent_id, body)
+        }))
+        .route("/schedules/{schedule_id}/toggle", post({
+            let db = db_url11.clone();
+            move |Path(schedule_id): Path<String>| toggle_schedule((*db).clone(), schedule_id)
         }))
         
         // KB - Knowledge Base

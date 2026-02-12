@@ -5,10 +5,11 @@ mod storage;
 mod web;
 
 use clap::Parser;
-use cli::{AgentCommands, Cli, Commands, DbCommands, HumanCommands, KbCommands, MailCommands};
+use cli::{AgentCommands, Cli, Commands, DbCommands, HumanCommands, KbCommands, MailCommands, ScheduleCommands};
 use services::kb::{KnowledgeBaseService, KnowledgeBaseServiceImpl};
 use services::kb::domain::LuhmannId;
 use services::mail::{MailService, MailServiceImpl};
+use services::schedule::{ScheduleService, ScheduleServiceImpl};
 use storage::memory::InMemoryStorage;
 use storage::postgres::PostgresStorage;
 
@@ -51,30 +52,37 @@ async fn main() -> anyhow::Result<()> {
                 handle_kb_command(kb_service, kb_cmd).await?;
             }
         }
+        Commands::Schedule(schedule_cmd) => {
+            if let Some(url) = database_url {
+                let pool = sqlx::postgres::PgPool::connect(&url).await?;
+                // Migrate schedules table on startup
+                let storage = PostgresStorage::new(pool.clone());
+                storage.migrate_schedules_table().await?;
+                let schedule_service = ScheduleServiceImpl::new(pool);
+                handle_schedule_command(schedule_service, schedule_cmd).await?;
+            } else {
+                eprintln!("Schedule commands require a database connection. Please set AGENT_OFFICE_URL or DATABASE_URL.");
+                std::process::exit(1);
+            }
+        }
         _ => {
             if let Some(url) = database_url {
                 let pool = sqlx::postgres::PgPool::connect(&url).await?;
+                // Migrate schedules table
                 let storage = PostgresStorage::new(pool.clone());
+                storage.migrate_schedules_table().await?;
                 let mail_service = MailServiceImpl::new(storage);
-                let kb_storage = PostgresStorage::new(pool);
-                let _kb_service = KnowledgeBaseServiceImpl::new(kb_storage);
+                let schedule_service = ScheduleServiceImpl::new(pool.clone());
                 
                 match cli.command {
                     Commands::Mail(mail_cmd) => handle_mail_command(mail_service, mail_cmd).await?,
-                    Commands::Agent(agent_cmd) => handle_agent_command(mail_service, agent_cmd).await?,
+                    Commands::Agent(agent_cmd) => handle_agent_command(mail_service, schedule_service, agent_cmd).await?,
                     _ => {}
                 }
             } else {
                 // Use in-memory storage
-                let storage = InMemoryStorage::new();
-                let mail_service = MailServiceImpl::new(storage.clone());
-                let _kb_service = KnowledgeBaseServiceImpl::new(storage);
-                
-                match cli.command {
-                    Commands::Mail(mail_cmd) => handle_mail_command(mail_service, mail_cmd).await?,
-                    Commands::Agent(agent_cmd) => handle_agent_command(mail_service, agent_cmd).await?,
-                    _ => {}
-                }
+                eprintln!("Agent run and schedule commands require a database connection. Please set AGENT_OFFICE_URL or DATABASE_URL.");
+                std::process::exit(1);
             }
         }
     }
@@ -354,6 +362,7 @@ async fn handle_mail_command(
 
 async fn handle_agent_command(
     service: impl MailService,
+    schedule_service: impl ScheduleService,
     cmd: AgentCommands,
 ) -> anyhow::Result<()> {
     match cmd {
@@ -407,7 +416,7 @@ async fn handle_agent_command(
             
             let _ = service.set_agent_status(agent_id.clone(), "online").await;
             println!("Agent '{}' is now online", agent_id);
-            println!("Watching for new mail (checking every {} seconds)", interval);
+            println!("Watching for new mail and schedules (checking every {} seconds)", interval);
             println!("Press Ctrl+C to stop");
             
             let ctrl_c = tokio::signal::ctrl_c();
@@ -416,6 +425,41 @@ async fn handle_agent_command(
             let immediate_check_duration = Duration::from_millis(100);
             let mut running = true;
             let mut check_immediately = true;
+            
+            // Helper function to execute bash command
+            async fn execute_bash(agent_id: &str, bash: &str, event_desc: &str) {
+                use std::process::Stdio;
+                use std::io::{BufRead, BufReader};
+                
+                let session_id = format!("{}-session", agent_id);
+                let mut child = Command::new("bash")
+                    .arg("-c")
+                    .arg(bash)
+                    .env("AGENT_OFFICE_SESSION", &session_id)
+                    .env("AGENT_OFFICE_EVENT", event_desc)
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()
+                    .expect("Failed to execute bash command");
+                
+                if let Some(stdout) = child.stdout.take() {
+                    let reader = BufReader::new(stdout);
+                    for line in reader.lines() {
+                        if let Ok(line) = line {
+                            println!("{}", line);
+                        }
+                    }
+                }
+                if let Some(stderr) = child.stderr.take() {
+                    let reader = BufReader::new(stderr);
+                    for line in reader.lines() {
+                        if let Ok(line) = line {
+                            eprintln!("{}", line);
+                        }
+                    }
+                }
+                let _ = child.wait();
+            }
             
             while running {
                 let sleep_duration = if check_immediately {
@@ -431,6 +475,10 @@ async fn handle_agent_command(
                         running = false;
                     }
                     _ = sleep(sleep_duration) => {
+                        let current_time = chrono::Utc::now();
+                        let mut triggered = false;
+                        
+                        // Check for unread mail
                         let (has_unread, mails) = service.check_unread_mail(agent_id.clone()).await?;
                         if has_unread {
                             println!("\n📬 Found {} unread message(s)", mails.len());
@@ -438,37 +486,24 @@ async fn handle_agent_command(
                                 println!("  - {}", mail.subject);
                             }
                             println!("Executing: {}", bash);
-                            use std::process::Stdio;
-                            use std::io::{BufRead, BufReader};
-                            let session_id = format!("{}-session", agent_id);
                             let event_desc = format!("agent id \"{}\" has unread mail", agent_id);
-                            let mut child = Command::new("bash")
-                                .arg("-c")
-                                .arg(&bash)
-                                .env("AGENT_OFFICE_SESSION", &session_id)
-                                .env("AGENT_OFFICE_EVENT", &event_desc)
-                                .stdout(Stdio::piped())
-                                .stderr(Stdio::piped())
-                                .spawn()
-                                .expect("Failed to execute bash command");
-                            if let Some(stdout) = child.stdout.take() {
-                                let reader = BufReader::new(stdout);
-                                for line in reader.lines() {
-                                    if let Ok(line) = line {
-                                        println!("{}", line);
-                                    }
-                                }
-                            }
-                            if let Some(stderr) = child.stderr.take() {
-                                let reader = BufReader::new(stderr);
-                                for line in reader.lines() {
-                                    if let Ok(line) = line {
-                                        eprintln!("{}", line);
-                                    }
-                                }
-                            }
-                            let _ = child.wait();
+                            execute_bash(&agent_id, &bash, &event_desc).await;
                             println!("\n✓ Command completed - waiting for new messages...");
+                            triggered = true;
+                        }
+                        
+                        // Check for scheduled tasks
+                        let fired_actions = schedule_service.check_and_fire_schedules(&agent_id, current_time).await?;
+                        for action in fired_actions {
+                            println!("\n⏰ Schedule triggered: {}", action);
+                            println!("Executing: {}", bash);
+                            let event_desc = format!("agent id \"{}\" has received a scheduled \"{}\"", agent_id, action);
+                            execute_bash(&agent_id, &bash, &event_desc).await;
+                            println!("\n✓ Command completed - waiting for new messages...");
+                            triggered = true;
+                        }
+                        
+                        if triggered {
                             check_immediately = true;
                         }
                     }
@@ -630,6 +665,78 @@ async fn handle_kb_command(
                 .ok_or_else(|| anyhow::anyhow!("Invalid Luhmann ID: {}", luhmann_id))?;
             service.delete_note(&id).await?;
             println!("Deleted note [{}]", luhmann_id);
+        }
+    }
+    Ok(())
+}
+
+async fn handle_schedule_command(
+    service: impl ScheduleService,
+    cmd: ScheduleCommands,
+) -> anyhow::Result<()> {
+    match cmd {
+        ScheduleCommands::Create { agent_id, cron, action } => {
+            let schedule = service.create_schedule(agent_id.clone(), cron.clone(), action.clone()).await?;
+            println!("✅ Created schedule for agent '{}'", agent_id);
+            println!("   ID: {}", schedule.id);
+            println!("   CRON: {}", cron);
+            println!("   Action: {}", action);
+        }
+        ScheduleCommands::List { agent_id } => {
+            let schedules = service.list_schedules_by_agent(&agent_id).await?;
+            if schedules.is_empty() {
+                println!("No schedules found for agent '{}'", agent_id);
+            } else {
+                println!("Schedules for agent '{}' ({} total):", agent_id, schedules.len());
+                for schedule in schedules {
+                    let status = if schedule.is_active { "🟢 Active" } else { "⚪ Inactive" };
+                    let last_fired = schedule.last_fired_at
+                        .map(|t| format!("Last fired: {}", t.format("%Y-%m-%d %H:%M:%S")))
+                        .unwrap_or_else(|| "Never fired".to_string());
+                    println!("  [{}] {} - {}", schedule.id, status, last_fired);
+                    println!("      CRON: {}", schedule.cron_expression);
+                    println!("      Action: {}", schedule.action.lines().next().unwrap_or(""));
+                }
+            }
+        }
+        ScheduleCommands::Get { schedule_id } => {
+            let id = uuid::Uuid::parse_str(&schedule_id)
+                .map_err(|_| anyhow::anyhow!("Invalid schedule ID: {}", schedule_id))?;
+            let schedule = service.get_schedule(id).await?;
+            let status = if schedule.is_active { "🟢 Active" } else { "⚪ Inactive" };
+            println!("Schedule {}", id);
+            println!("  Agent ID: {}", schedule.agent_id);
+            println!("  Status: {}", status);
+            println!("  CRON: {}", schedule.cron_expression);
+            println!("  Action: {}", schedule.action);
+            if let Some(last_fired) = schedule.last_fired_at {
+                println!("  Last fired: {}", last_fired.format("%Y-%m-%d %H:%M:%S"));
+            }
+            // Show next predicted run
+            if let Some(next_run) = service.get_next_run(&schedule, chrono::Utc::now()) {
+                println!("  Next run: {}", next_run.format("%Y-%m-%d %H:%M:%S"));
+            }
+        }
+        ScheduleCommands::Update { schedule_id, cron, action } => {
+            let id = uuid::Uuid::parse_str(&schedule_id)
+                .map_err(|_| anyhow::anyhow!("Invalid schedule ID: {}", schedule_id))?;
+            let schedule = service.update_schedule(id, cron, action).await?;
+            println!("✅ Updated schedule {}", id);
+            println!("   CRON: {}", schedule.cron_expression);
+            println!("   Action: {}", schedule.action);
+        }
+        ScheduleCommands::Delete { schedule_id } => {
+            let id = uuid::Uuid::parse_str(&schedule_id)
+                .map_err(|_| anyhow::anyhow!("Invalid schedule ID: {}", schedule_id))?;
+            service.delete_schedule(id).await?;
+            println!("✅ Deleted schedule {}", schedule_id);
+        }
+        ScheduleCommands::Toggle { schedule_id } => {
+            let id = uuid::Uuid::parse_str(&schedule_id)
+                .map_err(|_| anyhow::anyhow!("Invalid schedule ID: {}", schedule_id))?;
+            let schedule = service.toggle_schedule(id).await?;
+            let status = if schedule.is_active { "active" } else { "inactive" };
+            println!("✅ Schedule {} is now {}", schedule_id, status);
         }
     }
     Ok(())
