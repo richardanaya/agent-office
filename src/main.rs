@@ -507,7 +507,15 @@ async fn handle_agent_command(
                         }
                         
                         // Check for scheduled tasks
+                        eprintln!("DEBUG: Checking schedules for agent '{}' at time {}", agent_id, current_time.format("%Y-%m-%d %H:%M:%S"));
+                        let all_schedules = schedule_service.list_schedules_by_agent(&agent_id).await?;
+                        eprintln!("DEBUG: Found {} total schedules for agent", all_schedules.len());
+                        for (i, sched) in all_schedules.iter().enumerate() {
+                            eprintln!("DEBUG: Schedule {}: ID={}, cron='{}', action='{}', is_active={}, last_fired={:?}", 
+                                i, sched.id, sched.cron_expression, sched.action, sched.is_active, sched.last_fired_at);
+                        }
                         let fired_actions = schedule_service.check_and_fire_schedules(&agent_id, current_time).await?;
+                        eprintln!("DEBUG: Fired {} schedules this tick", fired_actions.len());
                         for action in fired_actions {
                             println!("\n⏰ Schedule triggered: {}", action);
                             println!("Executing: {}", bash);

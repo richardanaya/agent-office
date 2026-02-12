@@ -34,13 +34,23 @@ impl ScheduleServiceImpl {
     /// Helper to check if schedule should fire
     /// Check if schedule should fire for current minute
     fn should_fire(&self, schedule: &Schedule, current_time: DateTime<Utc>) -> bool {
+        eprintln!("DEBUG should_fire: checking schedule id={}, cron='{}', is_active={}", 
+            schedule.id, schedule.cron_expression, schedule.is_active);
+        
         if !schedule.is_active {
+            eprintln!("DEBUG should_fire: inactive, returning false");
             return false;
         }
 
         let cron = match self.validate_cron(&schedule.cron_expression) {
-            Ok(c) => c,
-            Err(_) => return false,
+            Ok(c) => {
+                eprintln!("DEBUG should_fire: cron validated successfully");
+                c
+            }
+            Err(e) => {
+                eprintln!("DEBUG should_fire: cron validation failed: {}", e);
+                return false;
+            }
         };
 
         // Get the current minute boundaries
@@ -50,12 +60,21 @@ impl ScheduleServiceImpl {
             .with_nanosecond(0)
             .unwrap();
         let current_minute_end = current_minute_start + Duration::minutes(1);
+        
+        eprintln!("DEBUG should_fire: current_time={}, minute_start={}, minute_end={}",
+            current_time.format("%Y-%m-%d %H:%M:%S"),
+            current_minute_start.format("%Y-%m-%d %H:%M:%S"),
+            current_minute_end.format("%Y-%m-%d %H:%M:%S"));
 
         // Check if last_fired_at was within current minute
         if let Some(last_fired) = schedule.last_fired_at {
+            eprintln!("DEBUG should_fire: last_fired={}", last_fired.format("%Y-%m-%d %H:%M:%S"));
             if last_fired >= current_minute_start && last_fired < current_minute_end {
+                eprintln!("DEBUG should_fire: already fired this minute, returning false");
                 return false; // Already fired this minute
             }
+        } else {
+            eprintln!("DEBUG should_fire: never fired before");
         }
 
         // Check if cron would fire during this minute
@@ -63,11 +82,20 @@ impl ScheduleServiceImpl {
             .after(&current_minute_start)
             .take(1)
             .collect();
+        
+        eprintln!("DEBUG should_fire: upcoming times found: {}", upcoming.len());
 
         if let Some(next_time) = upcoming.first() {
-            // Check if next occurrence is within current minute
-            *next_time >= current_minute_start && *next_time < current_minute_end
+            eprintln!("DEBUG should_fire: next cron occurrence at {} (minute_start={}, minute_end={})",
+                next_time.format("%Y-%m-%d %H:%M:%S"),
+                current_minute_start.format("%Y-%m-%d %H:%M:%S"),
+                current_minute_end.format("%Y-%m-%d %H:%M:%S"));
+            let should = *next_time >= current_minute_start && *next_time < current_minute_end;
+            eprintln!("DEBUG should_fire: next_time in current minute? {} -> returning {}", 
+                should, should);
+            should
         } else {
+            eprintln!("DEBUG should_fire: no upcoming times, returning false");
             false
         }
     }
@@ -250,10 +278,16 @@ impl ScheduleService for ScheduleServiceImpl {
         current_time: DateTime<Utc>,
     ) -> Result<Vec<String>> {
         let schedules = self.list_schedules_by_agent(agent_id).await?;
+        eprintln!("DEBUG: check_and_fire_schedules found {} schedules for agent {}", schedules.len(), agent_id);
         let mut fired_actions = Vec::new();
 
-        for schedule in schedules {
-            if self.should_fire(&schedule, current_time) {
+        for (i, schedule) in schedules.iter().enumerate() {
+            eprintln!("DEBUG: Checking schedule {}: id={}, cron='{}', active={}", 
+                i, schedule.id, schedule.cron_expression, schedule.is_active);
+            let should_fire = self.should_fire(schedule, current_time);
+            eprintln!("DEBUG: should_fire returned: {}", should_fire);
+            if should_fire {
+                eprintln!("DEBUG: Schedule {} will fire! Updating last_fired_at...", schedule.id);
                 // Update last_fired_at
                 sqlx::query(
                     r#"
@@ -270,9 +304,11 @@ impl ScheduleService for ScheduleServiceImpl {
                 .map_err(|e| ScheduleError::Storage(e.to_string()))?;
 
                 fired_actions.push(schedule.action.clone());
+                eprintln!("DEBUG: Schedule fired successfully, action: '{}'", schedule.action);
             }
         }
 
+        eprintln!("DEBUG: check_and_fire_schedules returning {} fired actions", fired_actions.len());
         Ok(fired_actions)
     }
 
