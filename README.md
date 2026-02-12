@@ -40,13 +40,19 @@ The `agent run` command lets you automatically trigger an AI agent when new mail
 
 ```bash
 # Run agent and have opencode process new mail when it arrives
+# Note: Use single quotes to prevent shell from expanding $AGENT_OFFICE_SESSION
 agent-office agent run my-agent 'opencode run --agent my-agent --session $AGENT_OFFICE_SESSION "read your mail"'
 
 # Check every 30 seconds (default is 60)
 agent-office agent run my-agent 'opencode run --agent my-agent --session $AGENT_OFFICE_SESSION "check inbox and respond to urgent messages"' -i 30
+
+# Test the session variable
+agent-office agent run coordinator 'echo $AGENT_OFFICE_SESSION'
 ```
 
 **Session Management:** When running an agent, the `AGENT_OFFICE_SESSION` environment variable is automatically set to `{agent_id}-session` (e.g., `my-agent-session`). This ensures consistent session tracking across multiple runs. The bash command can reference this variable using `$AGENT_OFFICE_SESSION`.
+
+**Important:** Always use **single quotes** around the bash command to prevent your shell from expanding `$AGENT_OFFICE_SESSION` before it reaches the agent. If you use double quotes, the shell will try to expand the variable and it will be empty.
 
 **Agent Configuration:** Create your agent at `~/.config/opencode/agents/my-agent.md` with full permissions using YAML front matter:
 
