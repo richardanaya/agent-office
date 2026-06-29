@@ -48,12 +48,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/innercontext/agent-office.git"
+    "url": "git+https://github.com/richardanaya/agent-office.git"
   },
   "bugs": {
-    "url": "https://github.com/innercontext/agent-office/issues"
+    "url": "https://github.com/richardanaya/agent-office/issues"
   },
-  "homepage": "https://github.com/innercontext/agent-office#readme",
+  "homepage": "https://github.com/richardanaya/agent-office#readme",
   "publishConfig": {
     "access": "public"
   },

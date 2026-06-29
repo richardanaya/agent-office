@@ -134,9 +134,7 @@ npm login
 npm publish
 ```
 
-CI runs on push via GitHub Actions (`.github/workflows/ci.yml`). To publish from CI, add an `NPM_TOKEN` repository secret, tag a release (`git tag v0.8.0 && git push origin v0.8.0`), and the release workflow publishes with provenance.
-
-Before publishing locally:
+Before publishing:
 
 ```bash
 npm run typecheck
