@@ -1,0 +1,173 @@
+import { createTool } from '@mastra/core/tools'
+import { z } from 'zod'
+import { officeMailbox } from './mailbox.js'
+import { listCoworkerProfiles } from './coworkers.js'
+import { clearScheduledAction, getScheduledAction, scheduleSelfWake } from './scheduled-actions.js'
+
+export function createSendOfficeMessageTool(from: string) {
+  return createTool({
+    id: 'send_office_message',
+    description: 'Send a direct message to another virtual office coworker by name.',
+    inputSchema: z.object({
+      to: z.string().describe('The coworker name, for example alice, bob, or carol.'),
+      message: z.string().describe('The message to send.'),
+    }),
+    outputSchema: z.object({
+      id: z.string(),
+      from: z.string(),
+      to: z.string(),
+      queued: z.boolean(),
+      note: z.string(),
+    }),
+    execute: async ({ to, message }) => {
+      const pendingWake = getScheduledAction(from)
+      if (to.trim().toLowerCase() === 'human' && pendingWake) {
+        throw new Error(
+          `You have a scheduled wake pending: ${JSON.stringify(pendingWake)}. Wait for that wake before sending a final message to Human, or use clear_scheduled_action first if the plan has changed.`,
+        )
+      }
+
+      const sent = officeMailbox.send({ from, to, body: message })
+      return {
+        id: sent.id,
+        from: sent.from,
+        to: sent.to,
+        queued: true,
+        note: 'Message queued in the office mailbox. The recipient signal provider will deliver it shortly.',
+      }
+    },
+  })
+}
+
+const scheduledActionSchema = z.object({
+  id: z.string().describe('Unique id for the scheduled wake action.'),
+  agentName: z.string().describe('The agent that owns and will receive this scheduled wake.'),
+  instruction: z.string().describe('The instruction that will be sent back to the agent at wake time.'),
+  scheduledAt: z.string().describe('ISO timestamp when the wake was scheduled.'),
+  wakeAt: z.string().describe('ISO timestamp when the wake notification should be sent.'),
+  delaySeconds: z.number().int().describe('Delay, in whole seconds, between scheduling and wake time.'),
+})
+
+export function createScheduleSelfWakeTool(agentName: string) {
+  return createTool({
+    id: 'schedule_self_wake',
+    description:
+      'Schedule exactly one future wakeful notification to yourself. Use this when you need to pause and continue later, for example waiting 10 seconds for coworkers to reply before checking the inbox. This tool fails if you already have a future wake scheduled; call get_scheduled_action to inspect it or clear_scheduled_action before replacing it.',
+    strict: true,
+    inputSchema: z.object({
+      delaySeconds: z
+        .number()
+        .int('delaySeconds must be a whole number of seconds, not a decimal.')
+        .min(1, 'delaySeconds must be at least 1 second.')
+        .max(3600, 'delaySeconds cannot be more than 3600 seconds / 1 hour.')
+        .describe(
+          'Required. Whole number of seconds from now before waking yourself. Must be 1 through 3600. Use small values like 10-30 seconds for short waits in demos.',
+        ),
+      instruction: z
+        .string()
+        .trim()
+        .min(5, 'instruction must describe what to do when waking up.')
+        .max(1000, 'instruction must be 1000 characters or less.')
+        .describe(
+          'Required. Clear imperative reminder for your future self, e.g. "Check whether Bob and Carol replied, then summarize the best joke to Human." Must be 5-1000 non-whitespace characters.',
+        ),
+    }),
+    outputSchema: scheduledActionSchema,
+    execute: async ({ delaySeconds, instruction }) => scheduleSelfWake({ agentName, delaySeconds, instruction }),
+  })
+}
+
+export function createClearScheduledActionTool(agentName: string) {
+  return createTool({
+    id: 'clear_scheduled_action',
+    description: 'Clear your currently scheduled self-wake action, if any.',
+    inputSchema: z.object({}),
+    strict: true,
+    outputSchema: z.object({
+      cleared: z.boolean().describe('True when a scheduled wake existed and was cleared.'),
+      action: scheduledActionSchema.optional().describe('The cleared scheduled wake action, if one existed.'),
+    }),
+    execute: async () => {
+      const action = clearScheduledAction(agentName)
+      return { cleared: Boolean(action), action }
+    },
+  })
+}
+
+export function createGetScheduledActionTool(agentName: string) {
+  return createTool({
+    id: 'get_scheduled_action',
+    description: 'Check whether you currently have a scheduled self-wake action.',
+    inputSchema: z.object({}),
+    strict: true,
+    outputSchema: z.object({
+      action: scheduledActionSchema.optional().describe('Current scheduled wake action, if one exists.'),
+    }),
+    execute: async () => ({ action: getScheduledAction(agentName) }),
+  })
+}
+
+export const getCurrentTimeTool = createTool({
+  id: 'get_current_time',
+  description: 'Get the current time as Unix time in seconds. Use this when you need an exact current timestamp for scheduling or time calculations.',
+  inputSchema: z.object({}),
+  outputSchema: z.object({
+    unixTime: z.number().int().describe('Current Unix timestamp in seconds.'),
+  }),
+  execute: async () => ({ unixTime: Math.floor(Date.now() / 1000) }),
+})
+
+export const convertUnixTimeToIso8601Tool = createTool({
+  id: 'convert_unix_time_to_iso8601',
+  description: 'Convert a Unix timestamp to an ISO 8601 UTC timestamp string.',
+  strict: true,
+  inputSchema: z.object({
+    unixTime: z
+      .number()
+      .int('unixTime must be a whole number.')
+      .min(0, 'unixTime must be non-negative.')
+      .describe('Unix timestamp to convert. Seconds by default, or milliseconds when unit is "milliseconds".'),
+    unit: z
+      .enum(['seconds', 'milliseconds'])
+      .default('seconds')
+      .describe('Whether unixTime is in seconds or milliseconds. Defaults to seconds.'),
+  }),
+  outputSchema: z.object({
+    iso8601: z.string().describe('ISO 8601 UTC timestamp.'),
+  }),
+  execute: async ({ unixTime, unit }) => {
+    const milliseconds = unit === 'milliseconds' ? unixTime : unixTime * 1000
+    const date = new Date(milliseconds)
+    if (Number.isNaN(date.getTime())) throw new Error('Invalid Unix timestamp.')
+    return { iso8601: date.toISOString() }
+  },
+})
+
+export const listCoworkersTool = createTool({
+  id: 'list_coworkers',
+  description: 'List the current runtime coworkers in the virtual office and their roles. Use this for any question about coworker names, roles, availability, or who is in the office because the list can change at runtime.',
+  inputSchema: z.object({}),
+  outputSchema: z.object({
+    coworkers: z.array(z.object({ name: z.string(), role: z.string() })),
+  }),
+  execute: async () => ({ coworkers: listCoworkerProfiles() }),
+})
+
+export const listOfficeMessagesTool = createTool({
+  id: 'list_office_messages',
+  description: 'Inspect all messages in the virtual office mailbox. Useful for demos and debugging.',
+  inputSchema: z.object({}),
+  outputSchema: z.object({
+    messages: z.array(
+      z.object({
+        id: z.string(),
+        from: z.string(),
+        to: z.string(),
+        body: z.string(),
+        createdAt: z.string(),
+        deliveredAt: z.string().optional(),
+      }),
+    ),
+  }),
+  execute: async () => ({ messages: officeMailbox.list() }),
+})

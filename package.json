@@ -1,0 +1,79 @@
+{
+  "name": "agent-office",
+  "version": "0.8.0",
+  "description": "Virtual office for Mastra agents with a terminal UI for human teammates",
+  "author": "Richard Anaya",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "agent-office": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "prepare": "npm run build",
+    "prestart": "npm run build",
+    "prepublishOnly": "npm run typecheck && npm run build",
+    "start": "node dist/cli.js",
+    "dev": "tsx src/cli.tsx",
+    "mastra:dev": "mastra dev",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "agent",
+    "agents",
+    "ai",
+    "cli",
+    "ink",
+    "llm",
+    "mastra",
+    "office",
+    "signals",
+    "terminal",
+    "tui"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/innercontext/agent-office.git"
+  },
+  "bugs": {
+    "url": "https://github.com/innercontext/agent-office/issues"
+  },
+  "homepage": "https://github.com/innercontext/agent-office#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@mastra/core": "^1.47.0",
+    "@mastra/libsql": "^1.14.2",
+    "@mastra/memory": "^1.21.2",
+    "ink": "^7.1.0",
+    "react": "^19.2.7",
+    "string-width": "^5.1.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "@types/react": "^19.2.17",
+    "mastra": "^1.16.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}
