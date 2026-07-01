@@ -1,6 +1,6 @@
 import { SignalProvider } from '@mastra/core/signals'
 import type { SignalProviderTarget, SignalSubscription } from '@mastra/core/signals'
-import { normalizeCoworkerName, officeMailbox } from './mailbox.js'
+import { officeMailbox } from './mailbox.js'
 
 export class OfficeSignals extends SignalProvider<'office-signals'> {
   readonly id = 'office-signals' as const
@@ -20,8 +20,6 @@ export class OfficeSignals extends SignalProvider<'office-signals'> {
       const messages = officeMailbox.undeliveredFor(sub.externalResourceId)
 
       for (const message of messages) {
-        if (normalizeCoworkerName(message.from) === 'human') continue
-
         await this.notify(
           {
             source: this.id,

@@ -1,15 +1,19 @@
 import { createTool } from '@mastra/core/tools'
 import { z } from 'zod'
 import { officeMailbox } from './mailbox.js'
-import { listCoworkerProfiles } from './coworkers.js'
+import { listAgentCoworkers, listCoworkerProfiles } from './coworkers.js'
 import { clearScheduledAction, getScheduledAction, scheduleSelfWake } from './scheduled-actions.js'
+import { createOfficeTask, listCoworkerStatuses, listOfficeTasks, setCoworkerStatus, updateOfficeTask } from './kanban.js'
+import { askHumanQuestion } from './human-questions.js'
+
+const recentHumanReplies = new Map<string, number>()
 
 export function createSendOfficeMessageTool(from: string) {
   return createTool({
     id: 'send_office_message',
-    description: 'Send a direct message to another virtual office coworker by name.',
+    description: 'Send a direct message to another virtual office coworker by name, to Human, or to "All" to broadcast to the whole office.',
     inputSchema: z.object({
-      to: z.string().describe('The coworker name, for example alice, bob, or carol.'),
+      to: z.string().describe('The coworker name, Human, or All to broadcast to all agents and Human.'),
       message: z.string().describe('The message to send.'),
     }),
     outputSchema: z.object({
@@ -25,6 +29,35 @@ export function createSendOfficeMessageTool(from: string) {
         throw new Error(
           `You have a scheduled wake pending: ${JSON.stringify(pendingWake)}. Wait for that wake before sending a final message to Human, or use clear_scheduled_action first if the plan has changed.`,
         )
+      }
+
+      const normalizedTo = to.trim().toLowerCase()
+      if (normalizedTo === 'human') {
+        const key = `${from.toLowerCase()}:human`
+        const now = Date.now()
+        const lastSentAt = recentHumanReplies.get(key)
+        if (lastSentAt && now - lastSentAt < 8_000) {
+          throw new Error('You already sent Human a message moments ago. Stop now and wait for a new Human message before sending another reply.')
+        }
+        recentHumanReplies.set(key, now)
+      }
+
+      if (normalizedTo === 'all') {
+        const recipients = [...listAgentCoworkers().map(coworker => coworker.name), 'Human'].filter(
+          recipient => recipient.toLowerCase() !== from.toLowerCase(),
+        )
+        const sentMessages = recipients.map(recipient => officeMailbox.send({
+          from,
+          to: recipient,
+          body: recipient.toLowerCase() === 'human' ? message : `[Public office message to All from ${from}] ${message}`,
+        }))
+        return {
+          id: sentMessages[0]?.id ?? `broadcast_${Date.now()}`,
+          from,
+          to: 'all',
+          queued: true,
+          note: `Broadcast queued to ${recipients.join(', ')}. Recipient signal providers will deliver it shortly.`,
+        }
       }
 
       const sent = officeMailbox.send({ from, to, body: message })
@@ -151,6 +184,108 @@ export const listCoworkersTool = createTool({
     coworkers: z.array(z.object({ name: z.string(), role: z.string() })),
   }),
   execute: async () => ({ coworkers: listCoworkerProfiles() }),
+})
+
+export function createAskHumanQuestionTool(agentName: string) {
+  return createTool({
+    id: 'ask_human_question',
+    description: 'Ask Human one short-form question with single-choice or multiple-choice options. Human can always add a custom freeform answer. The question appears in the terminal UI and the answer is sent back as a Human message.',
+    strict: true,
+    inputSchema: z.object({
+      prompt: z.string().trim().min(5).max(300),
+      mode: z.enum(['single', 'multiple']).default('single'),
+      choices: z.array(z.string().trim().min(1).max(120)).min(1).max(9),
+      allowCustomAnswer: z.boolean().default(true),
+    }),
+    outputSchema: z.object({
+      id: z.string(),
+      from: z.string(),
+      prompt: z.string(),
+      mode: z.string(),
+      choices: z.array(z.string()),
+      allowCustomAnswer: z.boolean(),
+      createdAt: z.string(),
+    }),
+    execute: async input => askHumanQuestion({ ...input, mode: input.mode ?? 'single', from: agentName }),
+  })
+}
+
+export function createSetStatusTool(agentName: string) {
+  return createTool({
+    id: 'set_status',
+    description: 'Set your visible office status so coworkers and Human can see what you are doing.',
+    strict: true,
+    inputSchema: z.object({
+      status: z.enum(['available', 'thinking', 'working', 'waiting', 'blocked', 'done', 'away']),
+      note: z.string().trim().max(200).optional().describe('Short optional status note.'),
+    }),
+    outputSchema: z.object({
+      name: z.string(),
+      status: z.string(),
+      note: z.string().optional(),
+      updatedAt: z.string(),
+    }),
+    execute: async ({ status, note }) => setCoworkerStatus({ name: agentName, status, note }),
+  })
+}
+
+export const listStatusesTool = createTool({
+  id: 'list_statuses',
+  description: 'List visible coworker statuses.',
+  inputSchema: z.object({}),
+  outputSchema: z.object({
+    statuses: z.array(z.object({ name: z.string(), status: z.string(), note: z.string().optional(), updatedAt: z.string() })),
+  }),
+  execute: async () => ({ statuses: listCoworkerStatuses() }),
+})
+
+export function createOfficeTaskTool(agentName: string) {
+  return createTool({
+    id: 'create_office_task',
+    description: 'Create a task on the shared mini office Kanban board.',
+    strict: true,
+    inputSchema: z.object({
+      title: z.string().trim().min(3).max(120),
+      description: z.string().trim().max(1000).optional(),
+      assignee: z.string().trim().max(64).optional(),
+      priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
+    }),
+    outputSchema: z.object({
+      id: z.string(), title: z.string(), description: z.string().optional(), status: z.string(), assignee: z.string().optional(), priority: z.string(), createdBy: z.string(), createdAt: z.string(), updatedAt: z.string(),
+    }),
+    execute: async input => createOfficeTask({ ...input, createdBy: agentName }),
+  })
+}
+
+export const updateOfficeTaskTool = createTool({
+  id: 'update_office_task',
+  description: 'Update a task on the shared mini office Kanban board: move columns, assign, reprioritize, or revise details.',
+  strict: true,
+  inputSchema: z.object({
+    id: z.string(),
+    title: z.string().trim().min(3).max(120).optional(),
+    description: z.string().trim().max(1000).optional(),
+    status: z.enum(['backlog', 'todo', 'doing', 'blocked', 'review', 'done', 'canceled']).optional(),
+    assignee: z.string().trim().max(64).optional(),
+    priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
+  }),
+  outputSchema: z.object({
+    id: z.string(), title: z.string(), description: z.string().optional(), status: z.string(), assignee: z.string().optional(), priority: z.string(), createdBy: z.string(), createdAt: z.string(), updatedAt: z.string(),
+  }),
+  execute: async input => updateOfficeTask(input),
+})
+
+export const listOfficeTasksTool = createTool({
+  id: 'list_office_tasks',
+  description: 'List tasks on the shared mini office Kanban board, optionally filtered by status or assignee.',
+  inputSchema: z.object({
+    status: z.enum(['backlog', 'todo', 'doing', 'blocked', 'review', 'done', 'canceled']).optional(),
+    assignee: z.string().optional(),
+  }),
+  outputSchema: z.object({
+    tasks: z.array(z.object({ id: z.string(), title: z.string(), description: z.string().optional(), status: z.string(), assignee: z.string().optional(), priority: z.string(), createdBy: z.string(), createdAt: z.string(), updatedAt: z.string() })),
+  }),
+  execute: async filter => ({ tasks: listOfficeTasks(filter) }),
 })
 
 export const listOfficeMessagesTool = createTool({

@@ -1,4 +1,4 @@
-export { resolveOfficeResourceId, resolveStorageUrl } from './config.js'
+export { resolveOfficeResourceId } from './config.js'
 export {
   alice,
   bob,
@@ -15,13 +15,19 @@ export { OfficeSignals } from './office/office-signals.js'
 export { OFFICE_RESOURCE_ID, coworkerThread } from './office/threads.js'
 export {
   convertUnixTimeToIso8601Tool,
+  createAskHumanQuestionTool,
   createClearScheduledActionTool,
   createGetScheduledActionTool,
+  createOfficeTaskTool,
   createScheduleSelfWakeTool,
   createSendOfficeMessageTool,
+  createSetStatusTool,
   getCurrentTimeTool,
   listCoworkersTool,
   listOfficeMessagesTool,
+  listOfficeTasksTool,
+  listStatusesTool,
+  updateOfficeTaskTool,
 } from './office/tools.js'
 export {
   HUMAN_NAME,
@@ -46,3 +52,22 @@ export {
   scheduleSelfWake,
   type ScheduledAction,
 } from './office/scheduled-actions.js'
+export {
+  createOfficeTask,
+  getCoworkerStatus,
+  listCoworkerStatuses,
+  listOfficeTasks,
+  setCoworkerStatus,
+  updateOfficeTask,
+  type CoworkerStatus,
+  type OfficeTask,
+  type OfficeTaskPriority,
+  type OfficeTaskStatus,
+} from './office/kanban.js'
+export {
+  answerHumanQuestion,
+  askHumanQuestion,
+  listHumanQuestions,
+  type HumanQuestion,
+  type HumanQuestionChoiceMode,
+} from './office/human-questions.js'

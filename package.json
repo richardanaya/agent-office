@@ -62,8 +62,6 @@
   },
   "dependencies": {
     "@mastra/core": "^1.47.0",
-    "@mastra/libsql": "^1.14.2",
-    "@mastra/memory": "^1.21.2",
     "ink": "^7.1.0",
     "react": "^19.2.7",
     "string-width": "^5.1.2",
