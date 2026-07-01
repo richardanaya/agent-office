@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
-import stringWidth from 'string-width'
 import { Agent } from '@mastra/core/agent'
 import {
   alice,
@@ -20,122 +19,13 @@ import { coworkerThread } from './office/threads.js'
 import { mastra } from './mastra/index.js'
 import { listCoworkerStatuses, listOfficeTasks, type CoworkerStatus, type OfficeTask } from './office/kanban.js'
 import { answerHumanQuestion, listHumanQuestions, type HumanQuestion } from './office/human-questions.js'
+import { expandLogLines, logContentWidth, type LogLine } from './cli/log-text.js'
+import { formatOfficeEvent, handleReasoningChunk, type Chunk } from './cli/office-events.js'
+import { ChatPanel, CoworkerPanel, QuestionPanel } from './cli/panels.js'
 
-type AgentName = string
-type LogLine = { id: number; text: string; color?: string }
-type DisplayLine = { key: string; text: string; color?: string }
-type Chunk = { type?: string; payload?: any; data?: any }
 type Mode = 'chat' | 'coworkers' | 'questions' | 'add-name' | 'add-role'
 
 let nextLogId = 1
-const reasoningBuffers = new Map<string, string>()
-const activeReasoning = new Set<string>()
-
-function normalizeLogText(text: string) {
-  return text.replace(/\s+/g, ' ').trim()
-}
-
-function logContentWidth(columns: number) {
-  return Math.max(20, columns - 12)
-}
-
-function wrapLogText(text: string, width: number): string[] {
-  if (width < 1) return [text]
-
-  const lines: string[] = []
-  for (const paragraph of text.replace(/\r\n/g, '\n').split('\n')) {
-    if (!paragraph) {
-      lines.push('')
-      continue
-    }
-
-    let current = ''
-    let currentWidth = 0
-
-    const pushLine = () => {
-      if (!current) return
-      lines.push(current.trimEnd())
-      current = ''
-      currentWidth = 0
-    }
-
-    const pushChars = (value: string) => {
-      for (const char of value) {
-        const charWidth = stringWidth(char)
-        if (currentWidth + charWidth > width && currentWidth > 0) {
-          pushLine()
-        }
-        current += char
-        currentWidth += charWidth
-      }
-    }
-
-    for (const word of paragraph.split(/(\s+)/)) {
-      if (!word) continue
-      const wordWidth = stringWidth(word)
-
-      if (wordWidth > width) {
-        pushLine()
-        pushChars(word)
-        continue
-      }
-
-      if (currentWidth + wordWidth > width && currentWidth > 0) {
-        pushLine()
-      }
-
-      current += word
-      currentWidth += wordWidth
-    }
-
-    pushLine()
-  }
-
-  return lines.length > 0 ? lines : ['']
-}
-
-function expandLogLines(logs: LogLine[], width: number): DisplayLine[] {
-  const expanded: DisplayLine[] = []
-  for (const log of logs) {
-    const parts = wrapLogText(log.text, width)
-    parts.forEach((text, index) => {
-      expanded.push({ key: `${log.id}:${index}`, text, color: log.color })
-    })
-  }
-  return expanded
-}
-
-function handleReasoningChunk(agentName: string, chunk: Chunk, addLog: (text: string, color?: string) => void) {
-  switch (chunk.type) {
-    case 'reasoning-start': {
-      const id = chunk.payload?.id ?? 'default'
-      const key = `${agentName}:${id}`
-      reasoningBuffers.set(key, '')
-      if (activeReasoning.has(key)) return true
-      activeReasoning.add(key)
-      addLog(`💭 ${agentName} is thinking…`, 'gray')
-      return true
-    }
-    case 'reasoning-delta': {
-      const id = chunk.payload?.id ?? 'default'
-      const key = `${agentName}:${id}`
-      const delta = chunk.payload?.text ?? ''
-      reasoningBuffers.set(key, `${reasoningBuffers.get(key) ?? ''}${delta}`)
-      return true
-    }
-    case 'reasoning-end': {
-      const id = chunk.payload?.id ?? 'default'
-      const key = `${agentName}:${id}`
-      activeReasoning.delete(key)
-      const reasoning = normalizeLogText(reasoningBuffers.get(key) ?? '')
-      reasoningBuffers.delete(key)
-      if (reasoning) addLog(`💭 ${agentName} reasoning: ${reasoning}`, 'gray')
-      return true
-    }
-    default:
-      return false
-  }
-}
 
 function App() {
   const { exit } = useApp()
@@ -432,100 +322,6 @@ function App() {
       </Box>
     </Box>
   )
-}
-
-function statusFor(statuses: CoworkerStatus[], name: string) {
-  return statuses.find(status => status.name.toLowerCase() === name.toLowerCase())
-}
-
-function kanbanSummary(tasks: OfficeTask[]) {
-  const columns = ['todo', 'doing', 'blocked', 'review', 'done']
-  return columns.map(column => `${column}:${tasks.filter(task => task.status === column).length}`).join(' ')
-}
-
-function ChatPanel({ names, selectedIndex, selectedName, message, statuses, tasks, questionCount }: { names: string[]; selectedIndex: number; selectedName?: string; message: string; statuses: CoworkerStatus[]; tasks: OfficeTask[]; questionCount: number }) {
-  return <>
-    <Text>Tab manage coworkers{questionCount > 0 ? ` · ? answer ${questionCount} question${questionCount === 1 ? '' : 's'}` : ''} · ↑/↓ select · Enter send · Ctrl+C quit</Text>
-    <Box marginTop={1}>{names.map((name, index) => {
-      const status = statusFor(statuses, name)
-      const label = `${name}${status ? `:${status.status}` : ''}`
-      return <Box key={name} marginRight={2}><Text color={index === selectedIndex ? 'cyan' : undefined} inverse={index === selectedIndex}>{index === selectedIndex ? ` ${label} ` : label}</Text></Box>
-    })}</Box>
-    <Text color="gray">Kanban {kanbanSummary(tasks)}</Text>
-    <Box><Text color="cyan">To {selectedName}: </Text><Text>{message}</Text><Text color="gray">█</Text></Box>
-  </>
-}
-
-function QuestionPanel({ questions, questionIndex, selectedChoices, customSelected, customAnswer }: { questions: HumanQuestion[]; questionIndex: number; selectedChoices: string[]; customSelected: boolean; customAnswer: string }) {
-  const question = questions[Math.min(questionIndex, Math.max(0, questions.length - 1))]
-  if (!question) return <Text color="gray">No pending questions. Esc/Tab returns to chat.</Text>
-  return <>
-    <Text>Esc {customSelected ? 'clear custom' : 'chat'} · ↑/↓ question · number toggles/selects · select Custom to type · Enter submit</Text>
-    <Text color="yellow">{questionIndex + 1}/{questions.length} From {question.from}: {question.prompt}</Text>
-    <Text color="gray">Mode: {question.mode} · custom answer allowed</Text>
-    {question.choices.slice(0, 9).map((choice, index) => (
-      <Text key={choice} color={selectedChoices.includes(choice) ? 'green' : undefined}>{index + 1}. {selectedChoices.includes(choice) ? '☑' : '☐'} {choice}</Text>
-    ))}
-    {question.allowCustomAnswer && <Text color={customSelected ? 'green' : undefined}>{question.choices.length + 1}. {customSelected ? '☑' : '☐'} Custom{customSelected ? `: ${customAnswer}` : ''}{customSelected ? <Text color="gray">█</Text> : ''}</Text>}
-  </>
-}
-
-function CoworkerPanel({ names, selectedIndex, statuses, tasks }: { names: string[]; selectedIndex: number; statuses: CoworkerStatus[]; tasks: OfficeTask[] }) {
-  const activeTasks = tasks.filter(task => task.status !== 'done' && task.status !== 'canceled').slice(0, 3)
-  return <>
-    <Text>Esc/Tab chat · ↑/↓ select · a add runtime coworker · d remove for this run · Ctrl+C quit</Text>
-    {names.map((name, index) => {
-      const status = statusFor(statuses, name)
-      return <Text key={name} color={index === selectedIndex ? 'green' : undefined} inverse={index === selectedIndex}>{index === selectedIndex ? ` ${name} ` : ` ${name}`}<Text color="gray"> {status ? `${status.status}${status.note ? ` — ${status.note}` : ''}` : 'available'}</Text></Text>
-    })}
-    <Text color="gray">Kanban {kanbanSummary(tasks)}</Text>
-    {activeTasks.map(task => <Text key={task.id}>• [{task.status}] {task.title}{task.assignee ? ` @${task.assignee}` : ''}</Text>)}
-  </>
-}
-
-function formatOfficeEvent(agentName: AgentName, chunk: Chunk): { text: string; color?: string } | undefined {
-  switch (chunk.type) {
-    case 'data-signal': {
-      const attrs = chunk.data?.attributes ?? {}
-      const contents = chunk.data?.contents
-      if (attrs.kind === 'direct-message' && contents) return { text: `📨 ${agentName} received: ${contents}`, color: 'yellow' }
-      return
-    }
-    case 'tool-call': {
-      const { toolName, args } = chunk.payload ?? {}
-      if (toolName === 'send_office_message') return { text: `${args.to?.toLowerCase?.() === 'all' ? '📣' : '✉️ '} ${agentName} → ${args.to}: ${args.message}`, color: 'magenta' }
-      if (toolName === 'ask_human_question') return { text: `❓ ${agentName} asked Human: ${args.prompt}`, color: 'yellow' }
-      if (toolName === 'set_status') return { text: `📍 ${agentName} status → ${args.status}${args.note ? `: ${args.note}` : ''}`, color: 'blue' }
-      if (toolName === 'create_office_task') return { text: `📋 ${agentName} created task: ${args.title}`, color: 'green' }
-      if (toolName === 'update_office_task') return { text: `📋 ${agentName} updated task ${args.id}${args.status ? ` → ${args.status}` : ''}`, color: 'green' }
-      if (toolName === 'list_office_tasks') return { text: `📋 ${agentName} checked the Kanban board`, color: 'gray' }
-      if (toolName === 'list_statuses') return { text: `📍 ${agentName} checked coworker statuses`, color: 'gray' }
-      if (toolName === 'list_coworkers') return { text: `👥 ${agentName} checked the coworker directory`, color: 'gray' }
-      if (toolName === 'get_current_time') return { text: `🕒 ${agentName} checked current Unix time`, color: 'blue' }
-      if (toolName === 'convert_unix_time_to_iso8601') return { text: `🕒 ${agentName} converted Unix time ${args.unixTime} (${args.unit ?? 'seconds'}) to ISO 8601`, color: 'blue' }
-      return { text: `🛠️  ${agentName} called ${toolName}${args ? ` ${JSON.stringify(args)}` : ''}`, color: 'gray' }
-    }
-    case 'tool-result': {
-      const { toolName, result } = chunk.payload ?? {}
-      if (toolName === 'ask_human_question') return { text: `❓ ${agentName} queued question ${result.id}`, color: 'yellow' }
-      if (toolName === 'set_status') return { text: `📍 ${agentName} status set: ${result.status}${result.note ? ` — ${result.note}` : ''}`, color: 'blue' }
-      if (toolName === 'create_office_task') return { text: `📋 Created task ${result.id}: ${result.title}`, color: 'green' }
-      if (toolName === 'update_office_task') return { text: `📋 Task ${result.id}: ${result.status} — ${result.title}`, color: 'green' }
-      if (toolName === 'list_office_tasks') return { text: `📋 Kanban has ${result.tasks?.length ?? 0} task(s)`, color: 'gray' }
-      if (toolName === 'list_statuses') return { text: `📍 Found ${result.statuses?.length ?? 0} coworker status(es)`, color: 'gray' }
-      if (toolName === 'list_coworkers') return { text: `👥 Found ${result.coworkers?.length ?? 0} coworker(s)`, color: 'gray' }
-      if (toolName === 'list_office_messages') return { text: `✉️  Mailbox has ${result.messages?.length ?? 0} message(s)`, color: 'gray' }
-      if (toolName === 'schedule_self_wake') return { text: `⏰ ${agentName} scheduled wake in ${result.delaySeconds}s: ${result.instruction}`, color: 'blue' }
-      if (toolName === 'clear_scheduled_action' && result?.cleared) return { text: `🧹 ${agentName} cleared scheduled wake`, color: 'blue' }
-      if (toolName === 'get_current_time') return { text: `🕒 ${agentName} current Unix time: ${result.unixTime}`, color: 'blue' }
-      if (toolName === 'convert_unix_time_to_iso8601') return { text: `🕒 ${agentName} ISO 8601 time: ${result.iso8601}`, color: 'blue' }
-      return { text: `✅ ${agentName} ${toolName} result${result ? ` ${JSON.stringify(result).slice(0, 500)}` : ''}`, color: 'gray' }
-    }
-    case 'error': {
-      const error = chunk.payload?.error
-      return { text: `❌ ${agentName} error: ${error?.responseBody ?? error?.message ?? 'unknown error'}`, color: 'red' }
-    }
-  }
 }
 
 function ensureModelProviderConfigured() {
