@@ -11,7 +11,8 @@ export {
 } from './agents/coworkers.js'
 export { describeModelConfiguration, resolveCoworkerModel } from './agents/model.js'
 export { mastra } from './mastra/index.js'
-export { OfficeMailbox, normalizeCoworkerName, officeMailbox, type OfficeMessage } from './office/mailbox.js'
+export { OfficeMailbox, officeMailbox, type OfficeMessage } from './office/mailbox.js'
+export { normalizeCoworkerName } from './office/names.js'
 export { OfficeSignals } from './office/office-signals.js'
 export { OFFICE_RESOURCE_ID, coworkerThread } from './office/threads.js'
 export {

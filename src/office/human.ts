@@ -2,13 +2,14 @@ import type { Agent } from '@mastra/core/agent'
 import { coworkers } from '../agents/coworkers.js'
 import { mastra } from '../mastra/index.js'
 import { officeMailbox } from './mailbox.js'
+import { normalizeCoworkerName } from './names.js'
 import { coworkerThread } from './threads.js'
 import { listAgentCoworkers } from './coworkers.js'
 
 export const HUMAN_NAME = 'Human'
 
 function resolveCoworkerAgent(name: string): Agent | undefined {
-  const id = name.trim().toLowerCase()
+  const id = normalizeCoworkerName(name)
   if (id in coworkers) return coworkers[id as keyof typeof coworkers]
   try {
     return mastra.getAgentById(id)
@@ -22,14 +23,10 @@ export function sendHumanMessage(to: string, body: string) {
 }
 
 function recentContextFor(coworkerName: string, limit = 12) {
-  const coworker = coworkerName.trim().toLowerCase()
+  const coworker = normalizeCoworkerName(coworkerName)
   const relevant = officeMailbox
     .list()
-    .filter(message => {
-      const from = message.from.toLowerCase()
-      const to = message.to.toLowerCase()
-      return from === coworker || to === coworker || to === 'all'
-    })
+    .filter(message => message.from === coworker || message.to === coworker || message.to === 'all')
     .slice(-limit)
 
   if (relevant.length === 0) return ''
@@ -44,7 +41,7 @@ function messageWithContext(coworkerName: string, currentBody: string, publicMes
 }
 
 export async function deliverHumanMessage(to: string, body: string) {
-  if (to.trim().toLowerCase() === 'all') {
+  if (normalizeCoworkerName(to) === 'all') {
     const sent = officeMailbox.send({ from: HUMAN_NAME, to: 'all', body })
     officeMailbox.markDelivered(sent.id)
     const failures: string[] = []

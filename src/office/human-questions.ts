@@ -1,3 +1,4 @@
+import { createId } from './ids.js'
 import { officeMailbox } from './mailbox.js'
 
 export type HumanQuestionChoiceMode = 'single' | 'multiple'
@@ -42,7 +43,7 @@ export function askHumanQuestion(input: {
   allowCustomAnswer?: boolean
 }): HumanQuestion {
   const question: HumanQuestion = {
-    id: `question_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    id: createId('question'),
     from: input.from,
     prompt: input.prompt.trim(),
     mode: input.mode,

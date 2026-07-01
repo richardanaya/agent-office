@@ -3,9 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
 import type { Agent } from '@mastra/core/agent'
 import {
-  alice,
-  bob,
-  carol,
+  coworkers,
   createCoworkerAgent,
   subscribeCoworkerThread,
   subscribeCoworkerThreads,
@@ -31,7 +29,9 @@ function App() {
   const { exit } = useApp()
   const { stdout } = useStdout()
   const [mode, setMode] = useState<Mode>('chat')
-  const [agents, setAgents] = useState<Record<string, Agent>>({ Alice: alice, Bob: bob, Carol: carol })
+  const [agents, setAgents] = useState<Record<string, Agent>>(() =>
+    Object.fromEntries(agentCoworkerProfiles.map(profile => [profile.name, coworkers[profile.name.toLowerCase()]!])),
+  )
   const [names, setNames] = useState<string[]>(['All', ...agentCoworkerProfiles.map(profile => profile.name)])
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [message, setMessage] = useState('')

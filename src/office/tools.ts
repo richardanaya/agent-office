@@ -1,6 +1,7 @@
 import { createTool } from '@mastra/core/tools'
 import { z } from 'zod'
 import { officeMailbox } from './mailbox.js'
+import { normalizeCoworkerName } from './names.js'
 import { listAgentCoworkers, listCoworkerProfiles } from './coworkers.js'
 import { clearScheduledAction, getScheduledAction, scheduleSelfWake } from './scheduled-actions.js'
 import { createOfficeTask, listCoworkerStatuses, listOfficeTasks, setCoworkerStatus, updateOfficeTask } from './kanban.js'
@@ -34,23 +35,26 @@ export function createSendOfficeMessageTool(from: string) {
       note: z.string(),
     }),
     execute: async ({ to, message }) => {
-      const knownRecipients = ['all', ...listCoworkerProfiles().map(profile => profile.name.toLowerCase())]
-      if (!knownRecipients.includes(to.trim().toLowerCase())) {
+      const normalizedTo = normalizeCoworkerName(to)
+      const knownRecipients = ['all', ...listCoworkerProfiles().map(profile => normalizeCoworkerName(profile.name))]
+      if (!knownRecipients.includes(normalizedTo)) {
         throw new Error(
           `Unknown recipient "${to}". Valid recipients: ${[...listCoworkerProfiles().map(profile => profile.name), 'All'].join(', ')}. Use list_coworkers for the current directory.`,
         )
       }
 
+      // Blocking Human messages while a wake is pending counteracts a real
+      // model behavior: sending a premature "final" answer instead of waiting
+      // for the coworker replies the agent itself scheduled a wake for.
       const pendingWake = getScheduledAction(from)
-      if (to.trim().toLowerCase() === 'human' && pendingWake) {
+      if (normalizedTo === 'human' && pendingWake) {
         throw new Error(
           `You have a scheduled wake pending: ${JSON.stringify(pendingWake)}. Wait for that wake before sending a final message to Human, or use clear_scheduled_action first if the plan has changed.`,
         )
       }
 
-      const normalizedTo = to.trim().toLowerCase()
       if (normalizedTo === 'human') {
-        const key = `${from.toLowerCase()}:human`
+        const key = `${normalizeCoworkerName(from)}:human`
         const now = Date.now()
         pruneRecentHumanReplies(now)
         const lastSentAt = recentHumanReplies.get(key)
@@ -62,12 +66,12 @@ export function createSendOfficeMessageTool(from: string) {
 
       if (normalizedTo === 'all') {
         const recipients = [...listAgentCoworkers().map(coworker => coworker.name), 'Human'].filter(
-          recipient => recipient.toLowerCase() !== from.toLowerCase(),
+          recipient => normalizeCoworkerName(recipient) !== normalizeCoworkerName(from),
         )
         const sentMessages = recipients.map(recipient => officeMailbox.send({
           from,
           to: recipient,
-          body: recipient.toLowerCase() === 'human' ? message : `[Public office message to All from ${from}] ${message}`,
+          body: normalizeCoworkerName(recipient) === 'human' ? message : `[Public office message to All from ${from}] ${message}`,
         }))
         return {
           id: sentMessages[0]?.id ?? `broadcast_${Date.now()}`,
@@ -89,6 +93,25 @@ export function createSendOfficeMessageTool(from: string) {
     },
   })
 }
+
+const officeTaskSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  status: z.string(),
+  assignee: z.string().optional(),
+  priority: z.string(),
+  createdBy: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+const coworkerStatusSchema = z.object({
+  name: z.string(),
+  status: z.string(),
+  note: z.string().optional(),
+  updatedAt: z.string(),
+})
 
 const scheduledActionSchema = z.object({
   id: z.string().describe('Unique id for the scheduled wake action.'),
@@ -224,6 +247,8 @@ export function createAskHumanQuestionTool(agentName: string) {
       allowCustomAnswer: z.boolean(),
       createdAt: z.string(),
     }),
+    // Mastra types execute input as z.input, so the schema default('single')
+    // still leaves mode optional here.
     execute: async input => askHumanQuestion({ ...input, mode: input.mode ?? 'single', from: agentName }),
   })
 }
@@ -237,12 +262,7 @@ export function createSetStatusTool(agentName: string) {
       status: z.enum(['available', 'thinking', 'working', 'waiting', 'blocked', 'done', 'away']),
       note: z.string().trim().max(200).optional().describe('Short optional status note.'),
     }),
-    outputSchema: z.object({
-      name: z.string(),
-      status: z.string(),
-      note: z.string().optional(),
-      updatedAt: z.string(),
-    }),
+    outputSchema: coworkerStatusSchema,
     execute: async ({ status, note }) => setCoworkerStatus({ name: agentName, status, note }),
   })
 }
@@ -252,7 +272,7 @@ export const listStatusesTool = createTool({
   description: 'List visible coworker statuses.',
   inputSchema: z.object({}),
   outputSchema: z.object({
-    statuses: z.array(z.object({ name: z.string(), status: z.string(), note: z.string().optional(), updatedAt: z.string() })),
+    statuses: z.array(coworkerStatusSchema),
   }),
   execute: async () => ({ statuses: listCoworkerStatuses() }),
 })
@@ -268,9 +288,7 @@ export function createOfficeTaskTool(agentName: string) {
       assignee: z.string().trim().max(64).optional(),
       priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
     }),
-    outputSchema: z.object({
-      id: z.string(), title: z.string(), description: z.string().optional(), status: z.string(), assignee: z.string().optional(), priority: z.string(), createdBy: z.string(), createdAt: z.string(), updatedAt: z.string(),
-    }),
+    outputSchema: officeTaskSchema,
     execute: async input => createOfficeTask({ ...input, createdBy: agentName }),
   })
 }
@@ -287,9 +305,7 @@ export const updateOfficeTaskTool = createTool({
     assignee: z.string().trim().max(64).optional(),
     priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
   }),
-  outputSchema: z.object({
-    id: z.string(), title: z.string(), description: z.string().optional(), status: z.string(), assignee: z.string().optional(), priority: z.string(), createdBy: z.string(), createdAt: z.string(), updatedAt: z.string(),
-  }),
+  outputSchema: officeTaskSchema,
   execute: async input => updateOfficeTask(input),
 })
 
@@ -301,7 +317,7 @@ export const listOfficeTasksTool = createTool({
     assignee: z.string().optional(),
   }),
   outputSchema: z.object({
-    tasks: z.array(z.object({ id: z.string(), title: z.string(), description: z.string().optional(), status: z.string(), assignee: z.string().optional(), priority: z.string(), createdBy: z.string(), createdAt: z.string(), updatedAt: z.string() })),
+    tasks: z.array(officeTaskSchema),
   }),
   execute: async filter => ({ tasks: listOfficeTasks(filter) }),
 })

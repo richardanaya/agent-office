@@ -1,3 +1,6 @@
+import { createId } from './ids.js'
+import { normalizeCoworkerName } from './names.js'
+
 export type OfficeMessage = {
   id: string
   from: string
@@ -14,7 +17,7 @@ export class OfficeMailbox {
 
   send(input: { from: string; to: string; body: string }): OfficeMessage {
     const message: OfficeMessage = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      id: createId('msg'),
       from: normalizeCoworkerName(input.from),
       to: normalizeCoworkerName(input.to),
       body: input.body,
@@ -57,10 +60,6 @@ export class OfficeMailbox {
   list(): OfficeMessage[] {
     return [...this.messages]
   }
-}
-
-export function normalizeCoworkerName(name: string): string {
-  return name.trim().toLowerCase()
 }
 
 export const officeMailbox = new OfficeMailbox()

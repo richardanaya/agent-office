@@ -1,4 +1,6 @@
+import { createId } from './ids.js'
 import { officeMailbox } from './mailbox.js'
+import { normalizeCoworkerName } from './names.js'
 
 export type ScheduledAction = {
   id: string
@@ -14,14 +16,14 @@ type ScheduledActionRecord = ScheduledAction & { timeout: NodeJS.Timeout }
 const scheduledActions = new Map<string, ScheduledActionRecord>()
 
 export function getScheduledAction(agentName: string): ScheduledAction | undefined {
-  const record = scheduledActions.get(agentName.trim().toLowerCase())
+  const record = scheduledActions.get(normalizeCoworkerName(agentName))
   if (!record) return undefined
   const { timeout: _timeout, ...action } = record
   return action
 }
 
 export function scheduleSelfWake(input: { agentName: string; instruction: string; delaySeconds: number }): ScheduledAction {
-  const key = input.agentName.trim().toLowerCase()
+  const key = normalizeCoworkerName(input.agentName)
   const instruction = input.instruction.trim()
 
   if (!Number.isInteger(input.delaySeconds) || input.delaySeconds < 1 || input.delaySeconds > 3600) {
@@ -42,7 +44,7 @@ export function scheduleSelfWake(input: { agentName: string; instruction: string
   const delaySeconds = input.delaySeconds
   const now = Date.now()
   const action: ScheduledAction = {
-    id: `wake_${now}_${Math.random().toString(36).slice(2)}`,
+    id: createId('wake'),
     agentName: input.agentName,
     instruction,
     scheduledAt: new Date(now).toISOString(),
@@ -64,7 +66,7 @@ export function scheduleSelfWake(input: { agentName: string; instruction: string
 }
 
 export function clearScheduledAction(agentName: string): ScheduledAction | undefined {
-  const key = agentName.trim().toLowerCase()
+  const key = normalizeCoworkerName(agentName)
   const record = scheduledActions.get(key)
   if (!record) return undefined
   clearTimeout(record.timeout)

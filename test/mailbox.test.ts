@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { OfficeMailbox, normalizeCoworkerName } from '../src/office/mailbox.js'
+import { OfficeMailbox } from '../src/office/mailbox.js'
+import { normalizeCoworkerName } from '../src/office/names.js'
 
 describe('normalizeCoworkerName', () => {
   it('trims and lowercases', () => {

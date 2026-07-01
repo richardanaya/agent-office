@@ -1,3 +1,6 @@
+import { createId } from './ids.js'
+import { normalizeCoworkerName } from './names.js'
+
 export type CoworkerStatus = {
   name: string
   status: 'available' | 'thinking' | 'working' | 'waiting' | 'blocked' | 'done' | 'away'
@@ -30,12 +33,12 @@ export function setCoworkerStatus(input: { name: string; status: CoworkerStatus[
     note: input.note?.trim() || undefined,
     updatedAt: new Date().toISOString(),
   }
-  statuses.set(status.name.toLowerCase(), status)
+  statuses.set(normalizeCoworkerName(status.name), status)
   return status
 }
 
 export function getCoworkerStatus(name: string): CoworkerStatus | undefined {
-  return statuses.get(name.trim().toLowerCase())
+  return statuses.get(normalizeCoworkerName(name))
 }
 
 export function listCoworkerStatuses(): CoworkerStatus[] {
@@ -51,7 +54,7 @@ export function createOfficeTask(input: {
 }): OfficeTask {
   const now = new Date().toISOString()
   const task: OfficeTask = {
-    id: `task_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    id: createId('task'),
     title: input.title.trim(),
     description: input.description?.trim() || undefined,
     assignee: input.assignee?.trim() || undefined,
@@ -91,6 +94,6 @@ export function updateOfficeTask(input: {
 export function listOfficeTasks(filter: { status?: OfficeTaskStatus; assignee?: string } = {}): OfficeTask[] {
   return [...tasks.values()]
     .filter(task => !filter.status || task.status === filter.status)
-    .filter(task => !filter.assignee || task.assignee?.toLowerCase() === filter.assignee.trim().toLowerCase())
+    .filter(task => !filter.assignee || (task.assignee && normalizeCoworkerName(task.assignee) === normalizeCoworkerName(filter.assignee)))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 }

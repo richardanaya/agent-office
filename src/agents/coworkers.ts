@@ -91,11 +91,13 @@ Do not pretend to have sent a message or scheduled a wake unless you used the to
   })
 }
 
-export const alice = createCoworkerAgent(agentCoworkerProfiles[0]!.name, agentCoworkerProfiles[0]!.role)
-export const bob = createCoworkerAgent(agentCoworkerProfiles[1]!.name, agentCoworkerProfiles[1]!.role)
-export const carol = createCoworkerAgent(agentCoworkerProfiles[2]!.name, agentCoworkerProfiles[2]!.role)
+export const coworkers: Record<string, Agent> = Object.fromEntries(
+  agentCoworkerProfiles.map(profile => [profile.name.toLowerCase(), createCoworkerAgent(profile.name, profile.role)]),
+)
 
-export const coworkers = { alice, bob, carol }
+export const alice = coworkers.alice!
+export const bob = coworkers.bob!
+export const carol = coworkers.carol!
 
 export function subscribeCoworkerThread(name: string) {
   const lowerName = name.toLowerCase()

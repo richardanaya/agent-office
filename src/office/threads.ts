@@ -1,5 +1,5 @@
 import { resolveOfficeResourceId } from '../config.js'
-import { normalizeCoworkerName } from './mailbox.js'
+import { normalizeCoworkerName } from './names.js'
 
 export const OFFICE_RESOURCE_ID = resolveOfficeResourceId()
 
