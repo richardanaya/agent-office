@@ -3,11 +3,9 @@ export type CoworkerProfile = {
   role: string
 }
 
-export const agentCoworkerProfiles: CoworkerProfile[] = [
-  { name: 'Alice', role: 'product lead who coordinates priorities and decisions' },
-  { name: 'Bob', role: 'engineer who thinks through implementation details' },
-  { name: 'Carol', role: 'designer who reviews UX and communication clarity' },
-]
+// The office starts empty; coworkers are hired at runtime (interactively or
+// from a team file) via hireCoworker in hiring.ts.
+export const agentCoworkerProfiles: CoworkerProfile[] = []
 
 export const humanProfile: CoworkerProfile = {
   name: 'Human',

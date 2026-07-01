@@ -1,14 +1,15 @@
 export { resolveOfficeResourceId } from './config.js'
 export {
-  alice,
-  bob,
-  carol,
-  coworkers,
   createCoworkerAgent,
+  getCoworkerAgent,
+  listCoworkerAgents,
+  registerCoworkerAgent,
   subscribeCoworkerThread,
-  subscribeCoworkerThreads,
+  unregisterCoworkerAgent,
   unsubscribeCoworkerThread,
 } from './agents/coworkers.js'
+export { fireCoworker, hireCoworker, type HiredCoworker } from './office/hiring.js'
+export { loadTeamFile, saveTeamFile, teamFileSchema, type TeamFile } from './office/team.js'
 export { describeModelConfiguration, resolveCoworkerModel } from './agents/model.js'
 export { mastra } from './mastra/index.js'
 export { OfficeMailbox, officeMailbox, type OfficeMessage } from './office/mailbox.js'

@@ -1,5 +1,5 @@
 import type { Agent } from '@mastra/core/agent'
-import { coworkers } from '../agents/coworkers.js'
+import { getCoworkerAgent } from '../agents/coworkers.js'
 import { mastra } from '../mastra/index.js'
 import { officeMailbox } from './mailbox.js'
 import { normalizeCoworkerName } from './names.js'
@@ -9,10 +9,10 @@ import { listAgentCoworkers } from './coworkers.js'
 export const HUMAN_NAME = 'Human'
 
 function resolveCoworkerAgent(name: string): Agent | undefined {
-  const id = normalizeCoworkerName(name)
-  if (id in coworkers) return coworkers[id as keyof typeof coworkers]
+  const registered = getCoworkerAgent(name)
+  if (registered) return registered
   try {
-    return mastra.getAgentById(id)
+    return mastra.getAgentById(normalizeCoworkerName(name))
   } catch {
     return undefined
   }

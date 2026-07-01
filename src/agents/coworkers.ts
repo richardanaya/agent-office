@@ -17,11 +17,27 @@ import {
 } from '../office/tools.js'
 import { OfficeSignals } from '../office/office-signals.js'
 import { coworkerThread } from '../office/threads.js'
-import { agentCoworkerProfiles } from '../office/coworkers.js'
 import { resolveCoworkerModel } from './model.js'
 
 const officeSignalProviders = new Map<string, OfficeSignals>()
 const subscribedCoworkers = new Set<string>()
+const coworkerAgents = new Map<string, Agent>()
+
+export function getCoworkerAgent(name: string): Agent | undefined {
+  return coworkerAgents.get(name.trim().toLowerCase())
+}
+
+export function listCoworkerAgents(): Agent[] {
+  return [...coworkerAgents.values()]
+}
+
+export function registerCoworkerAgent(name: string, agent: Agent): void {
+  coworkerAgents.set(name.trim().toLowerCase(), agent)
+}
+
+export function unregisterCoworkerAgent(name: string): boolean {
+  return coworkerAgents.delete(name.trim().toLowerCase())
+}
 
 export function createCoworkerAgent(name: string, role: string) {
   const lowerName = name.toLowerCase()
@@ -91,14 +107,6 @@ Do not pretend to have sent a message or scheduled a wake unless you used the to
   })
 }
 
-export const coworkers: Record<string, Agent> = Object.fromEntries(
-  agentCoworkerProfiles.map(profile => [profile.name.toLowerCase(), createCoworkerAgent(profile.name, profile.role)]),
-)
-
-export const alice = coworkers.alice!
-export const bob = coworkers.bob!
-export const carol = coworkers.carol!
-
 export function subscribeCoworkerThread(name: string) {
   const lowerName = name.toLowerCase()
   if (subscribedCoworkers.has(lowerName)) return
@@ -112,8 +120,4 @@ export function unsubscribeCoworkerThread(name: string) {
   const lowerName = name.toLowerCase()
   officeSignalProviders.get(lowerName)?.unwatchCoworker(coworkerThread(name), name)
   subscribedCoworkers.delete(lowerName)
-}
-
-export function subscribeCoworkerThreads() {
-  for (const profile of agentCoworkerProfiles) subscribeCoworkerThread(profile.name)
 }
