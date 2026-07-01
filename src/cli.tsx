@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
-import { Agent } from '@mastra/core/agent'
+import type { Agent } from '@mastra/core/agent'
 import {
   alice,
   bob,
@@ -61,11 +61,11 @@ function App() {
   const displayLines = useMemo(() => expandLogLines(logs, logWrapWidth), [logs, logWrapWidth])
   const selectedName = names[Math.min(selectedIndex, Math.max(0, names.length - 1))]
 
-  const addLog = (text: string, color?: string) => {
+  const addLog = useCallback((text: string, color?: string) => {
     setLogs(current => [...current.slice(-1000), { id: nextLogId++, text, color }])
-  }
+  }, [])
 
-  async function watchAgent(agentName: string, agent: Agent) {
+  const watchAgent = useCallback(async (agentName: string, agent: Agent) => {
     const lowerName = agentName.toLowerCase()
     if (watching.current.has(lowerName)) return
     watching.current.add(lowerName)
@@ -88,7 +88,7 @@ function App() {
       threadSubscriptions.current.delete(lowerName)
       watching.current.delete(lowerName)
     }
-  }
+  }, [addLog])
 
   function unwatchAgent(agentName: string) {
     const lowerName = agentName.toLowerCase()
@@ -99,8 +99,9 @@ function App() {
 
   useEffect(() => {
     for (const name of Object.keys(agents)) void watchAgent(name, agents[name]!)
-  }, [agents])
+  }, [agents, watchAgent])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset the selection state whenever the active question changes
   useEffect(() => {
     setSelectedChoices([])
     setCustomSelected(false)
@@ -118,7 +119,7 @@ function App() {
       markAllHumanMessagesSeen()
     }, 1_000)
     return () => clearInterval(officePoll)
-  }, [])
+  }, [addLog])
 
   useInput((input, key) => {
     if (key.ctrl && input === 'c') exit()

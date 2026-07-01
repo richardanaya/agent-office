@@ -17,7 +17,22 @@ export type HumanQuestion = {
   }
 }
 
+const MAX_ANSWERED_QUESTIONS = 200
+
 const questions: HumanQuestion[] = []
+
+// Cap history: drop the oldest answered questions; unanswered ones are kept.
+function pruneAnsweredQuestions() {
+  let answeredCount = questions.filter(question => question.answeredAt).length
+  for (let index = 0; index < questions.length && answeredCount > MAX_ANSWERED_QUESTIONS; ) {
+    if (questions[index]!.answeredAt) {
+      questions.splice(index, 1)
+      answeredCount--
+    } else {
+      index++
+    }
+  }
+}
 
 export function askHumanQuestion(input: {
   from: string
@@ -36,6 +51,7 @@ export function askHumanQuestion(input: {
     createdAt: new Date().toISOString(),
   }
   questions.push(question)
+  pruneAnsweredQuestions()
   return question
 }
 

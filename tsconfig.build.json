@@ -7,5 +7,5 @@
     "rootDir": "src",
     "noEmit": false
   },
-  "include": ["src/**/*.ts", "src/cli.tsx"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

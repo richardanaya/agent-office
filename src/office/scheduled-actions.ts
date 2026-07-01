@@ -14,7 +14,7 @@ type ScheduledActionRecord = ScheduledAction & { timeout: NodeJS.Timeout }
 const scheduledActions = new Map<string, ScheduledActionRecord>()
 
 export function getScheduledAction(agentName: string): ScheduledAction | undefined {
-  const record = scheduledActions.get(agentName.toLowerCase())
+  const record = scheduledActions.get(agentName.trim().toLowerCase())
   if (!record) return undefined
   const { timeout: _timeout, ...action } = record
   return action
@@ -64,7 +64,7 @@ export function scheduleSelfWake(input: { agentName: string; instruction: string
 }
 
 export function clearScheduledAction(agentName: string): ScheduledAction | undefined {
-  const key = agentName.toLowerCase()
+  const key = agentName.trim().toLowerCase()
   const record = scheduledActions.get(key)
   if (!record) return undefined
   clearTimeout(record.timeout)

@@ -6,7 +6,17 @@ import { clearScheduledAction, getScheduledAction, scheduleSelfWake } from './sc
 import { createOfficeTask, listCoworkerStatuses, listOfficeTasks, setCoworkerStatus, updateOfficeTask } from './kanban.js'
 import { askHumanQuestion } from './human-questions.js'
 
+// Throttle window that stops an agent from double-messaging Human. This
+// counteracts a real model behavior (re-sending or rephrasing an answer in a
+// follow-up pass); keep it aligned with the "stop after answering" prompt rule.
+const HUMAN_REPLY_THROTTLE_MS = 8_000
 const recentHumanReplies = new Map<string, number>()
+
+function pruneRecentHumanReplies(now: number) {
+  for (const [key, sentAt] of recentHumanReplies) {
+    if (now - sentAt >= HUMAN_REPLY_THROTTLE_MS) recentHumanReplies.delete(key)
+  }
+}
 
 export function createSendOfficeMessageTool(from: string) {
   return createTool({
@@ -42,8 +52,9 @@ export function createSendOfficeMessageTool(from: string) {
       if (normalizedTo === 'human') {
         const key = `${from.toLowerCase()}:human`
         const now = Date.now()
+        pruneRecentHumanReplies(now)
         const lastSentAt = recentHumanReplies.get(key)
-        if (lastSentAt && now - lastSentAt < 8_000) {
+        if (lastSentAt && now - lastSentAt < HUMAN_REPLY_THROTTLE_MS) {
           throw new Error('You already sent Human a message moments ago. Stop now and wait for a new Human message before sending another reply.')
         }
         recentHumanReplies.set(key, now)

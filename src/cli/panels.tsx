@@ -1,4 +1,3 @@
-import React from 'react'
 import { Box, Text } from 'ink'
 import type { CoworkerStatus, OfficeTask } from '../office/kanban.js'
 import type { HumanQuestion } from '../office/human-questions.js'

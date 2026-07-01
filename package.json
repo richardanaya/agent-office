@@ -27,10 +27,12 @@
     "prepack": "npm run build",
     "prepare": "npm run build",
     "prestart": "npm run build",
-    "prepublishOnly": "npm run typecheck && npm run build",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm run test && npm run build",
     "start": "node dist/cli.js",
     "dev": "tsx src/cli.tsx",
     "mastra:dev": "mastra dev",
+    "test": "vitest run",
+    "lint": "biome lint src test",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
@@ -68,10 +70,12 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.2",
     "@types/node": "^26.0.1",
     "@types/react": "^19.2.17",
     "mastra": "^1.16.0",
     "tsx": "^4.22.4",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
   }
 }

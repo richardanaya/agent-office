@@ -7,6 +7,8 @@ export type OfficeMessage = {
   deliveredAt?: string
 }
 
+const MAX_MAILBOX_MESSAGES = 2000
+
 export class OfficeMailbox {
   private messages: OfficeMessage[] = []
 
@@ -20,7 +22,22 @@ export class OfficeMailbox {
     }
 
     this.messages.push(message)
+    this.prune()
     return message
+  }
+
+  // Drop the oldest delivered messages once the mailbox exceeds its cap;
+  // undelivered messages are never dropped.
+  private prune(): void {
+    let excess = this.messages.length - MAX_MAILBOX_MESSAGES
+    if (excess <= 0) return
+    this.messages = this.messages.filter(message => {
+      if (excess > 0 && message.deliveredAt) {
+        excess--
+        return false
+      }
+      return true
+    })
   }
 
   messagesFor(coworkerName: string): OfficeMessage[] {
