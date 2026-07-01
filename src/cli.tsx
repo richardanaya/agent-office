@@ -10,6 +10,7 @@ import {
   createCoworkerAgent,
   subscribeCoworkerThread,
   subscribeCoworkerThreads,
+  unsubscribeCoworkerThread,
 } from './agents/coworkers.js'
 import { describeModelConfiguration } from './agents/model.js'
 import { addAgentCoworker, agentCoworkerProfiles, removeAgentCoworker } from './office/coworkers.js'
@@ -25,8 +26,6 @@ type LogLine = { id: number; text: string; color?: string }
 type DisplayLine = { key: string; text: string; color?: string }
 type Chunk = { type?: string; payload?: any; data?: any }
 type Mode = 'chat' | 'coworkers' | 'questions' | 'add-name' | 'add-role'
-
-subscribeCoworkerThreads()
 
 let nextLogId = 1
 const reasoningBuffers = new Map<string, string>()
@@ -157,6 +156,7 @@ function App() {
   const [customSelected, setCustomSelected] = useState(false)
   const [customAnswer, setCustomAnswer] = useState('')
   const watching = useRef(new Set<string>())
+  const threadSubscriptions = useRef(new Map<string, { unsubscribe: () => void }>())
   const deliveryQueue = useRef(Promise.resolve())
   const [logs, setLogs] = useState<LogLine[]>([
     { id: nextLogId++, text: 'Agent office ready. Tab switches Chat/Coworkers. Enter sends.', color: 'green' },
@@ -176,15 +176,35 @@ function App() {
   }
 
   async function watchAgent(agentName: string, agent: Agent) {
-    if (watching.current.has(agentName.toLowerCase())) return
-    watching.current.add(agentName.toLowerCase())
-    const subscription = await agent.subscribeToThread(coworkerThread(agentName))
-    for await (const chunk of subscription.stream) {
-      const typed = chunk as Chunk
-      if (handleReasoningChunk(agentName, typed, addLog)) continue
-      const line = formatOfficeEvent(agentName, typed)
-      if (line) addLog(line.text, line.color)
+    const lowerName = agentName.toLowerCase()
+    if (watching.current.has(lowerName)) return
+    watching.current.add(lowerName)
+    try {
+      const subscription = await agent.subscribeToThread(coworkerThread(agentName))
+      threadSubscriptions.current.set(lowerName, subscription)
+      for await (const chunk of subscription.stream) {
+        const typed = chunk as Chunk
+        try {
+          if (handleReasoningChunk(agentName, typed, addLog)) continue
+          const line = formatOfficeEvent(agentName, typed)
+          if (line) addLog(line.text, line.color)
+        } catch (error) {
+          addLog(`⚠️ Could not render an event from ${agentName}: ${error instanceof Error ? error.message : String(error)}`, 'red')
+        }
+      }
+    } catch (error) {
+      addLog(`❌ Stopped watching ${agentName}: ${error instanceof Error ? error.message : String(error)}`, 'red')
+    } finally {
+      threadSubscriptions.current.delete(lowerName)
+      watching.current.delete(lowerName)
     }
+  }
+
+  function unwatchAgent(agentName: string) {
+    const lowerName = agentName.toLowerCase()
+    threadSubscriptions.current.get(lowerName)?.unsubscribe()
+    threadSubscriptions.current.delete(lowerName)
+    watching.current.delete(lowerName)
   }
 
   useEffect(() => {
@@ -226,7 +246,9 @@ function App() {
       return
     }
 
-    if (input === '?' && questions.length > 0 && mode !== 'add-name' && mode !== 'add-role') {
+    // Only treat "?" as a hotkey where it cannot be part of typed text: an
+    // empty chat input or the coworkers panel.
+    if (input === '?' && questions.length > 0 && ((mode === 'chat' && message === '') || mode === 'coworkers')) {
       setMode('questions')
       return
     }
@@ -238,30 +260,17 @@ function App() {
 
     if (mode === 'questions') {
       const question = questions[Math.min(questionIndex, Math.max(0, questions.length - 1))]
-      if (key.escape) return setMode('chat')
+      if (key.escape) {
+        if (customSelected) {
+          setCustomSelected(false)
+          setCustomAnswer('')
+          return
+        }
+        return setMode('chat')
+      }
       if (key.upArrow) return setQuestionIndex(index => Math.max(0, index - 1))
       if (key.downArrow) return setQuestionIndex(index => Math.min(Math.max(0, questions.length - 1), index + 1))
       if (!question) return
-      if (/^[0-9]$/.test(input)) {
-        const optionIndex = (input === '0' ? 10 : Number(input)) - 1
-        const customIndex = question.choices.length
-        if (question.allowCustomAnswer && optionIndex === customIndex) {
-          setCustomSelected(value => {
-            if (value) setCustomAnswer('')
-            return !value
-          })
-          if (question.mode === 'single') setSelectedChoices([])
-          return
-        }
-        const choice = question.choices[optionIndex]
-        if (!choice) return
-        if (question.mode === 'single') {
-          setSelectedChoices([choice])
-          setCustomSelected(false)
-          setCustomAnswer('')
-        } else setSelectedChoices(current => current.includes(choice) ? current.filter(item => item !== choice) : [...current, choice])
-        return
-      }
       if (key.return) {
         try {
           answerHumanQuestion({ id: question.id, selectedChoices, customAnswer: customSelected ? customAnswer : undefined })
@@ -276,9 +285,30 @@ function App() {
         }
         return
       }
-      if (!customSelected) return
-      if (key.backspace || key.delete) return setCustomAnswer(value => value.slice(0, -1))
-      if (input && !key.ctrl && !key.meta) setCustomAnswer(value => value + input)
+      // While the custom answer is active, all printable input (digits included)
+      // is text; Esc deselects it. Digit hotkeys only apply otherwise.
+      if (customSelected) {
+        if (key.backspace || key.delete) return setCustomAnswer(value => value.slice(0, -1))
+        if (input && !key.ctrl && !key.meta) setCustomAnswer(value => value + input)
+        return
+      }
+      if (/^[0-9]$/.test(input)) {
+        const optionIndex = (input === '0' ? 10 : Number(input)) - 1
+        const customIndex = question.choices.length
+        if (question.allowCustomAnswer && optionIndex === customIndex) {
+          setCustomSelected(true)
+          if (question.mode === 'single') setSelectedChoices([])
+          return
+        }
+        const choice = question.choices[optionIndex]
+        if (!choice) return
+        if (question.mode === 'single') {
+          setSelectedChoices([choice])
+          setCustomSelected(false)
+          setCustomAnswer('')
+        } else setSelectedChoices(current => current.includes(choice) ? current.filter(item => item !== choice) : [...current, choice])
+        return
+      }
       return
     }
 
@@ -313,6 +343,12 @@ function App() {
       if (input === 'd' && selectedName && selectedName.toLowerCase() !== 'all') {
         const removed = removeAgentCoworker(selectedName)
         if (removed) {
+          unsubscribeCoworkerThread(removed.name)
+          unwatchAgent(removed.name)
+          setAgents(current => {
+            const { [removed.name]: _removed, ...rest } = current
+            return rest
+          })
           setNames(current => current.filter(name => name !== selectedName))
           addLog(`🗑️ Removed coworker ${selectedName} for this run`, 'red')
           setSelectedIndex(0)
@@ -424,7 +460,7 @@ function QuestionPanel({ questions, questionIndex, selectedChoices, customSelect
   const question = questions[Math.min(questionIndex, Math.max(0, questions.length - 1))]
   if (!question) return <Text color="gray">No pending questions. Esc/Tab returns to chat.</Text>
   return <>
-    <Text>Esc chat · ↑/↓ question · number toggles/selects · select Custom to type · Enter submit</Text>
+    <Text>Esc {customSelected ? 'clear custom' : 'chat'} · ↑/↓ question · number toggles/selects · select Custom to type · Enter submit</Text>
     <Text color="yellow">{questionIndex + 1}/{questions.length} From {question.from}: {question.prompt}</Text>
     <Text color="gray">Mode: {question.mode} · custom answer allowed</Text>
     {question.choices.slice(0, 9).map((choice, index) => (
@@ -510,4 +546,5 @@ Optional override:
 }
 
 ensureModelProviderConfigured()
+subscribeCoworkerThreads()
 render(<App />)

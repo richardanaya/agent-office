@@ -47,19 +47,28 @@ export async function deliverHumanMessage(to: string, body: string) {
   if (to.trim().toLowerCase() === 'all') {
     const sent = officeMailbox.send({ from: HUMAN_NAME, to: 'all', body })
     officeMailbox.markDelivered(sent.id)
+    const failures: string[] = []
     for (const coworker of listAgentCoworkers()) {
       const agent = resolveCoworkerAgent(coworker.name)
-      if (!agent) continue
-      const result = agent.queueMessage(
-        {
-          contents: messageWithContext(coworker.name, body, true),
-          attributes: { name: HUMAN_NAME, sentFrom: 'agent-office', broadcast: true, to: 'All' },
-        },
-        coworkerThread(coworker.name),
-      )
-      const accepted = await result.accepted
-      if (accepted.action === 'discard') throw new Error(`Message to ${coworker.name} was discarded.`)
+      if (!agent) {
+        failures.push(coworker.name)
+        continue
+      }
+      try {
+        const result = agent.queueMessage(
+          {
+            contents: messageWithContext(coworker.name, body, true),
+            attributes: { name: HUMAN_NAME, sentFrom: 'agent-office', broadcast: true, to: 'All' },
+          },
+          coworkerThread(coworker.name),
+        )
+        const accepted = await result.accepted
+        if (accepted.action === 'discard') failures.push(coworker.name)
+      } catch {
+        failures.push(coworker.name)
+      }
     }
+    if (failures.length > 0) throw new Error(`Broadcast was not delivered to: ${failures.join(', ')}. Other coworkers received it.`)
     return sent
   }
 

@@ -20,11 +20,12 @@ import { coworkerThread } from '../office/threads.js'
 import { agentCoworkerProfiles } from '../office/coworkers.js'
 import { resolveCoworkerModel } from './model.js'
 
-const model = resolveCoworkerModel()
 const officeSignalProviders = new Map<string, OfficeSignals>()
+const subscribedCoworkers = new Set<string>()
 
 export function createCoworkerAgent(name: string, role: string) {
   const lowerName = name.toLowerCase()
+  const model = resolveCoworkerModel()
   const officeSignals = new OfficeSignals()
   officeSignalProviders.set(lowerName, officeSignals)
 
@@ -97,7 +98,18 @@ export const carol = createCoworkerAgent(agentCoworkerProfiles[2]!.name, agentCo
 export const coworkers = { alice, bob, carol }
 
 export function subscribeCoworkerThread(name: string) {
-  officeSignalProviders.get(name.toLowerCase())?.watchCoworker(coworkerThread(name), name)
+  const lowerName = name.toLowerCase()
+  if (subscribedCoworkers.has(lowerName)) return
+  const provider = officeSignalProviders.get(lowerName)
+  if (!provider) return
+  provider.watchCoworker(coworkerThread(name), name)
+  subscribedCoworkers.add(lowerName)
+}
+
+export function unsubscribeCoworkerThread(name: string) {
+  const lowerName = name.toLowerCase()
+  officeSignalProviders.get(lowerName)?.unwatchCoworker(coworkerThread(name), name)
+  subscribedCoworkers.delete(lowerName)
 }
 
 export function subscribeCoworkerThreads() {

@@ -1,7 +1,5 @@
 import { Mastra } from '@mastra/core'
-import { coworkers, subscribeCoworkerThreads } from '../agents/coworkers.js'
-
-subscribeCoworkerThreads()
+import { coworkers } from '../agents/coworkers.js'
 
 export const mastra = new Mastra({
   agents: coworkers,

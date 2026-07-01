@@ -24,6 +24,13 @@ export function createSendOfficeMessageTool(from: string) {
       note: z.string(),
     }),
     execute: async ({ to, message }) => {
+      const knownRecipients = ['all', ...listCoworkerProfiles().map(profile => profile.name.toLowerCase())]
+      if (!knownRecipients.includes(to.trim().toLowerCase())) {
+        throw new Error(
+          `Unknown recipient "${to}". Valid recipients: ${[...listCoworkerProfiles().map(profile => profile.name), 'All'].join(', ')}. Use list_coworkers for the current directory.`,
+        )
+      }
+
       const pendingWake = getScheduledAction(from)
       if (to.trim().toLowerCase() === 'human' && pendingWake) {
         throw new Error(

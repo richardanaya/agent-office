@@ -7,6 +7,7 @@ export {
   createCoworkerAgent,
   subscribeCoworkerThread,
   subscribeCoworkerThreads,
+  unsubscribeCoworkerThread,
 } from './agents/coworkers.js'
 export { describeModelConfiguration, resolveCoworkerModel } from './agents/model.js'
 export { mastra } from './mastra/index.js'
