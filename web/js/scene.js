@@ -7,7 +7,20 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 const PALETTE = ['#ff9f9f', '#ffc38a', '#f7e07e', '#9fe08f', '#8fd8e8', '#9fb8ff', '#c9aaff', '#ffaad5']
 const GRASS_RADIUS = 26
 const WANDER_RADIUS = 8
-const BUBBLE_SECONDS = 7
+
+const BUBBLE_FONT = '700 34px "M PLUS Rounded 1c", sans-serif'
+const BUBBLE_MAX_TEXT_WIDTH = 520
+const BUBBLE_MAX_LINES = 4
+const BUBBLE_LINE_HEIGHT = 44
+const BUBBLE_TAIL = 46
+const BUBBLE_PADDING = 88
+// 160 canvas pixels per world unit keeps bubble text a consistent size.
+const BUBBLE_PIXELS_PER_UNIT = 160
+
+// Bubbles stay up long enough to read: a base plus reading time by length.
+function bubbleSecondsFor(text) {
+  return Math.min(24, 8 + String(text).length * 0.07)
+}
 
 let scene
 let camera
@@ -74,48 +87,80 @@ function drawNameTag(tag, name, color, status) {
   texture.needsUpdate = true
 }
 
+function wrapBubbleLines(ctx, text, maxWidth, maxLines) {
+  const words = String(text).trim().split(/\s+/).filter(Boolean)
+  const lines = []
+  let current = ''
+  let truncated = false
+  for (const word of words) {
+    const attempt = current ? `${current} ${word}` : word
+    if (ctx.measureText(attempt).width <= maxWidth || !current) {
+      current = attempt
+      continue
+    }
+    if (lines.length === maxLines - 1) {
+      truncated = true
+      break
+    }
+    lines.push(current)
+    current = word
+  }
+  if (current) lines.push(current)
+  if (lines.length > maxLines) {
+    lines.length = maxLines
+    truncated = true
+  }
+  // Ellipsize any line that still overflows (unbroken long words, last line).
+  return lines.map((line, index) => {
+    const needsEllipsis = (truncated && index === lines.length - 1) || ctx.measureText(line).width > maxWidth
+    if (!needsEllipsis) return line
+    let trimmed = line
+    while (trimmed && ctx.measureText(`${trimmed}…`).width > maxWidth) trimmed = trimmed.slice(0, -1)
+    return `${trimmed.trimEnd()}…`
+  })
+}
+
+// Measure the text first, then size the canvas, bubble, and sprite to fit it:
+// short quips get small bubbles, long messages get room to breathe.
 function drawBubble(bubble, text) {
-  const { ctx, canvas, texture } = bubble
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  const { canvas, texture, sprite } = bubble
+  const ctx = canvas.getContext('2d')
+  ctx.font = BUBBLE_FONT
+  const lines = wrapBubbleLines(ctx, text, BUBBLE_MAX_TEXT_WIDTH, BUBBLE_MAX_LINES)
+  const widest = Math.max(120, ...lines.map(line => ctx.measureText(line).width))
+  const width = Math.ceil(Math.min(widest, BUBBLE_MAX_TEXT_WIDTH) + BUBBLE_PADDING)
+  const height = lines.length * BUBBLE_LINE_HEIGHT + 56 + BUBBLE_TAIL
+  canvas.width = width
+  canvas.height = height
+
+  // Resizing the canvas resets all context state.
   ctx.fillStyle = 'rgba(255, 255, 255, 0.96)'
   ctx.strokeStyle = '#e3d3a8'
   ctx.lineWidth = 8
-  roundedRect(ctx, 10, 10, canvas.width - 20, canvas.height - 60, 38)
+  roundedRect(ctx, 10, 10, width - 20, height - 20 - BUBBLE_TAIL, 30)
   ctx.fill()
   ctx.stroke()
   // Tail.
   ctx.beginPath()
-  ctx.moveTo(canvas.width / 2 - 24, canvas.height - 52)
-  ctx.lineTo(canvas.width / 2, canvas.height - 8)
-  ctx.lineTo(canvas.width / 2 + 24, canvas.height - 52)
+  ctx.moveTo(width / 2 - 24, height - BUBBLE_TAIL - 12)
+  ctx.lineTo(width / 2, height - 8)
+  ctx.lineTo(width / 2 + 24, height - BUBBLE_TAIL - 12)
   ctx.closePath()
   ctx.fill()
   ctx.stroke()
 
   ctx.fillStyle = '#6b4f2f'
-  ctx.font = '700 34px "M PLUS Rounded 1c", sans-serif'
+  ctx.font = BUBBLE_FONT
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  const words = String(text).split(/\s+/)
-  const lines = []
-  let current = ''
-  for (const word of words) {
-    const attempt = current ? `${current} ${word}` : word
-    if (ctx.measureText(attempt).width > canvas.width - 80 && current) {
-      lines.push(current)
-      current = word
-      if (lines.length === 2) break
-    } else {
-      current = attempt
-    }
-  }
-  if (lines.length < 2 && current) lines.push(current)
-  else if (current && lines.length === 2) lines[1] = `${lines[1].slice(0, Math.max(0, lines[1].length - 1))}…`
-  const centerY = (canvas.height - 60) / 2 + 10
+  const centerY = 10 + (height - 20 - BUBBLE_TAIL) / 2
   lines.forEach((line, index) => {
-    ctx.fillText(line, canvas.width / 2, centerY + (index - (lines.length - 1) / 2) * 42)
+    ctx.fillText(line, width / 2, centerY + (index - (lines.length - 1) / 2) * BUBBLE_LINE_HEIGHT)
   })
   texture.needsUpdate = true
+
+  const worldWidth = width / BUBBLE_PIXELS_PER_UNIT
+  sprite.scale.set(worldWidth, worldWidth * (height / width), 1)
 }
 
 function makeGrassTexture() {
@@ -294,7 +339,9 @@ function createVillager(name, role) {
   group.add(tag.sprite)
 
   const bubble = makeCanvasSprite(512, 176, 3.1)
-  bubble.sprite.position.y = 3.55
+  // Anchor at the tail tip so taller bubbles grow upward, not over the tag.
+  bubble.sprite.center.set(0.5, 0)
+  bubble.sprite.position.y = 3.0
   bubble.sprite.visible = false
   group.add(bubble.sprite)
 
@@ -352,7 +399,7 @@ export function agentBubble(name, text) {
   if (!villager || !text) return
   drawBubble(villager.bubble, text)
   villager.bubble.sprite.visible = true
-  villager.bubbleHideAt = performance.now() / 1000 + BUBBLE_SECONDS
+  villager.bubbleHideAt = performance.now() / 1000 + bubbleSecondsFor(text)
 }
 
 export function setThinking(name, thinking) {
