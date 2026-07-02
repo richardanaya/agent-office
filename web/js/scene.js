@@ -89,6 +89,8 @@ function appearanceFor(name, seed) {
     accessoryColor: pick(ACCESSORY_COLORS),
     bodyScale: 0.88 + random() * 0.28,
     headScale: 0.9 + random() * 0.22,
+    // Overall height: some villagers are shorties, some tower a bit.
+    height: 0.8 + random() * 0.45,
   }
 }
 
@@ -573,12 +575,18 @@ function createVillager(name, role, seed) {
   const color = appearance.fur
   const group = new THREE.Group()
 
+  // The whole character scales by height; sprites stay unscaled so tag and
+  // bubble text is the same size on short and tall villagers.
+  const figure = new THREE.Group()
+  figure.scale.setScalar(appearance.height)
+  group.add(figure)
+
   // The capsule body reads as the villager's outfit; the head is fur.
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 0.5, 6, 16), toon(appearance.shirt))
   body.position.y = 0.72
   body.scale.y = appearance.bodyScale
   body.castShadow = true
-  group.add(body)
+  figure.add(body)
 
   // Face parts are children of the head so proportions scale together.
   const headColor = appearance.species === 'human' ? appearance.skin : appearance.fur
@@ -586,10 +594,10 @@ function createVillager(name, role, seed) {
   head.position.y = 1.62
   head.scale.setScalar(appearance.headScale)
   head.castShadow = true
-  group.add(head)
+  figure.add(head)
 
   addSpeciesFeatures(head, appearance)
-  addChestAccessory(group, appearance)
+  addChestAccessory(figure, appearance)
 
   // White eyes with dark pupils; frog eyes sit on top of its head bumps.
   const eyeWhiteMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff' })
@@ -615,21 +623,21 @@ function createVillager(name, role, seed) {
   const tag = makeCanvasSprite(512, 176, 2.6)
   // Anchor the tag by its top edge so a two-line status grows downward.
   tag.sprite.center.set(0.5, 1)
-  tag.sprite.position.y = 3.05
+  tag.sprite.position.y = 3.05 * appearance.height
   drawNameTag(tag, name, color, '')
   group.add(tag.sprite)
 
   const bubble = makeCanvasSprite(BUBBLE_CANVAS_WIDTH, BUBBLE_CANVAS_HEIGHT, BUBBLE_CANVAS_WIDTH / BUBBLE_PIXELS_PER_UNIT)
   // Anchor at the tail tip so taller bubbles grow upward, not over the tag.
   bubble.sprite.center.set(0.5, 0)
-  bubble.sprite.position.y = 3.15
+  bubble.sprite.position.y = 3.15 * appearance.height
   bubble.sprite.visible = false
   group.add(bubble.sprite)
 
   const think = new THREE.Sprite(getThinkingMaterial())
   think.scale.set(1.0, 0.83, 1)
   think.center.set(0.5, 0)
-  think.position.set(0.75, 2.8, 0)
+  think.position.set(0.75, 2.8 * appearance.height, 0)
   think.visible = false
   group.add(think)
 
@@ -648,6 +656,7 @@ function createVillager(name, role, seed) {
     color,
     appearanceSeed: seed ?? 0,
     group,
+    body,
     tag,
     bubble,
     think,
@@ -733,7 +742,7 @@ function animate() {
   for (const villager of villagers.values()) {
     const { group } = villager
     // Bob and sway; think in place, wander otherwise.
-    group.children[0].position.y = 0.72 + Math.sin(now * (villager.thinking ? 7 : 3) + villager.phase) * 0.045
+    villager.body.position.y = 0.72 + Math.sin(now * (villager.thinking ? 7 : 3) + villager.phase) * 0.045
     if (!villager.thinking) {
       if (now >= villager.nextWanderAt) {
         const angle = Math.random() * Math.PI * 2
