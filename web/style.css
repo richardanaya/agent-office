@@ -37,7 +37,8 @@ body {
   user-select: none;
 }
 
-input {
+input,
+textarea {
   -webkit-user-select: text;
   user-select: text;
 }
@@ -148,6 +149,29 @@ input {
   padding-bottom: 6px;
   margin-bottom: 10px;
 }
+
+.panel-title.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.mini-button {
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--brown);
+  background: var(--cream-deep);
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.mini-button:hover { background: #efe2c2; }
+
+.mini-button:active { transform: translateY(1px); }
 
 #log-lines {
   display: flex;

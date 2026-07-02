@@ -26,6 +26,31 @@ function log(text, kind = '') {
   lines.scrollTop = lines.scrollHeight
 }
 
+// navigator.clipboard needs a secure context (https or localhost); fall back
+// to a scratch textarea for plain-http remote servers.
+function copyText(text) {
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text)
+  const scratch = document.createElement('textarea')
+  scratch.value = text
+  scratch.style.position = 'fixed'
+  scratch.style.opacity = '0'
+  document.body.appendChild(scratch)
+  scratch.select()
+  try {
+    document.execCommand('copy')
+  } finally {
+    scratch.remove()
+  }
+  return Promise.resolve()
+}
+
+$('copy-log').addEventListener('click', () => {
+  const text = [...$('log-lines').children].map(line => line.textContent).join('\n')
+  copyText(text)
+    .then(() => toast('Log copied! 📋'))
+    .catch(() => toast('Could not copy the log 😿'))
+})
+
 let toastTimer
 function toast(text) {
   const element = $('toast')
