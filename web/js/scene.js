@@ -40,10 +40,11 @@ const clouds = []
 let villagerClickHandler = () => {}
 let boardClickHandler = () => {}
 
-// Animal Crossing-style villager traits, all derived from the seed.
-const SPECIES = ['cat', 'dog', 'bear', 'rabbit', 'frog', 'bird', 'pig', 'mouse']
+// Animal Crossing-style villager traits, all derived from the seed. Humans
+// are one species among the animals; for them the fur color is hair color.
+const SPECIES = ['cat', 'dog', 'bear', 'rabbit', 'frog', 'bird', 'pig', 'mouse', 'human']
 const FUR_COLORS = ['#f6d7b0', '#e8b48a', '#c98f63', '#9c6b45', '#9a9a9a', '#f5f0e6', '#ffd9e8', '#b6e3ff', '#cbb2ff', '#b9e6a1', '#ffe08a', '#f79d84']
-const EYE_COLORS = ['#3c2c1e', '#2c5aa0', '#2f8f4e', '#8a5fc9', '#c0392b', '#1f8a99', '#d4881f']
+const SKIN_TONES = ['#ffe3c9', '#f3d3ac', '#e3b58a', '#c98f63', '#9c6b45']
 const ACCESSORIES = ['none', 'scarf', 'bowtie', 'pendant', 'buttons', 'badge']
 const ACCESSORY_COLORS = ['#e86a5e', '#f5c542', '#5aa73a', '#4a90d9', '#b06ab3', '#e08a3c']
 
@@ -82,8 +83,8 @@ function appearanceFor(name, seed) {
     species: pick(SPECIES),
     fur,
     muzzle: lighten(fur, 0.45),
+    skin: pick(SKIN_TONES),
     shirt: pick(PALETTE),
-    eye: pick(EYE_COLORS),
     accessory: pick(ACCESSORIES),
     accessoryColor: pick(ACCESSORY_COLORS),
     bodyScale: 0.88 + random() * 0.28,
@@ -440,13 +441,30 @@ function addSpeciesFeatures(head, appearance) {
       }
       addMuzzle(head, appearance)
       break
-    case 'frog':
+    case 'frog': {
+      // Eye bumps on top of the head; the eyes themselves sit on these.
       for (const side of [-1, 1]) {
-        const bump = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), fur)
-        bump.position.set(side * 0.22, 0.46, 0.08)
+        const bump = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), fur)
+        bump.position.set(side * 0.24, 0.42, 0.14)
         head.add(bump)
       }
+      const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.022, 8, 16, Math.PI), toon('#6b4f2f'))
+      mouth.rotation.z = Math.PI
+      mouth.position.set(0, -0.1, 0.47)
+      head.add(mouth)
       break
+    }
+    case 'human': {
+      const hair = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), toon(appearance.fur))
+      hair.position.y = 0.06
+      head.add(hair)
+      for (const side of [-1, 1]) {
+        const ear = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), toon(appearance.skin))
+        ear.position.set(side * 0.5, 0, 0)
+        head.add(ear)
+      }
+      break
+    }
     case 'bird': {
       const beak = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.28, 10), toon('#f2a33c'))
       beak.rotation.x = Math.PI / 2
@@ -544,7 +562,8 @@ function createVillager(name, role, seed) {
   group.add(body)
 
   // Face parts are children of the head so proportions scale together.
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.52, 20, 16), toon(appearance.fur))
+  const headColor = appearance.species === 'human' ? appearance.skin : appearance.fur
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.52, 20, 16), toon(headColor))
   head.position.y = 1.62
   head.scale.setScalar(appearance.headScale)
   head.castShadow = true
@@ -553,12 +572,18 @@ function createVillager(name, role, seed) {
   addSpeciesFeatures(head, appearance)
   addChestAccessory(group, appearance)
 
-  for (const side of [-0.18, 0.18]) {
-    const iris = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 10), new THREE.MeshBasicMaterial({ color: appearance.eye }))
-    iris.position.set(side, 0.05, 0.45)
-    head.add(iris)
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), new THREE.MeshBasicMaterial({ color: '#1d140c' }))
-    pupil.position.set(side, 0.05, 0.51)
+  // White eyes with dark pupils; frog eyes sit on top of its head bumps.
+  const eyeWhiteMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff' })
+  const pupilMaterial = new THREE.MeshBasicMaterial({ color: '#1d140c' })
+  const eyeSpot = appearance.species === 'frog'
+    ? { x: 0.24, y: 0.5, z: 0.24, size: 0.085 }
+    : { x: 0.18, y: 0.05, z: 0.45, size: 0.075 }
+  for (const side of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(eyeSpot.size, 10, 10), eyeWhiteMaterial)
+    eye.position.set(side * eyeSpot.x, eyeSpot.y, eyeSpot.z)
+    head.add(eye)
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), pupilMaterial)
+    pupil.position.set(side * eyeSpot.x, eyeSpot.y + (appearance.species === 'frog' ? 0.02 : 0), eyeSpot.z + 0.065)
     head.add(pupil)
   }
   const blushMaterial = new THREE.MeshBasicMaterial({ color: '#ffb3a3' })
