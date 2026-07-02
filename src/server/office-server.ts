@@ -1,5 +1,9 @@
+import { readFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { createRequire } from 'node:module'
 import type { AddressInfo } from 'node:net'
+import { dirname, extname, join, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Agent } from '@mastra/core/agent'
 import { getCoworkerAgent } from '../agents/coworkers.js'
 import { listAgentCoworkers } from '../office/coworkers.js'
@@ -15,6 +19,50 @@ import { OfficeEventBus } from './event-bus.js'
 const INBOX_PUMP_INTERVAL_MS = 500
 const SSE_HEARTBEAT_MS = 30_000
 const MAX_BODY_BYTES = 1_048_576
+
+// The static web UI ships in <package root>/web; this file compiles to
+// dist/server/, so ../../web resolves correctly from both src and dist.
+const WEB_ROOT = fileURLToPath(new URL('../../web', import.meta.url))
+
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+}
+
+// three.js is served from the installed package so the web UI needs no CDN
+// or build step. Resolved lazily so a missing install degrades to a 404.
+function resolveThreeRoots(): { build: string; addons: string } | undefined {
+  try {
+    // three does not export ./package.json; its main entry lives in build/.
+    const require = createRequire(import.meta.url)
+    const build = dirname(require.resolve('three'))
+    return { build, addons: join(dirname(build), 'examples', 'jsm') }
+  } catch {
+    return undefined
+  }
+}
+
+const threeRoots = resolveThreeRoots()
+
+async function serveStaticFile(res: ServerResponse, root: string, relativePath: string): Promise<void> {
+  const filePath = resolve(root, relativePath.replace(/^\/+/, ''))
+  if (filePath !== root && !filePath.startsWith(root + sep)) {
+    return sendJson(res, 404, { error: 'Not found.' })
+  }
+  try {
+    const contents = await readFile(filePath)
+    res.writeHead(200, { 'content-type': MIME_TYPES[extname(filePath)] ?? 'application/octet-stream' })
+    res.end(contents)
+  } catch {
+    sendJson(res, 404, { error: 'Not found.' })
+  }
+}
 
 export type OfficeServerOptions = {
   port?: number
@@ -168,7 +216,10 @@ export async function startOfficeServer(options: OfficeServerOptions = {}): Prom
     })
     res.write(':connected\n\n')
     sseClients.add(res)
-    const since = Number(url.searchParams.get('since') ?? 0)
+    // Browsers' native EventSource resumes with a Last-Event-ID header;
+    // other clients pass ?since=<id>.
+    const lastEventIdHeader = Number(req.headers['last-event-id'])
+    const since = Number(url.searchParams.get('since') ?? (Number.isFinite(lastEventIdHeader) ? lastEventIdHeader : 0))
     for (const stored of bus.eventsSince(Number.isFinite(since) ? since : 0)) writeSseEvent(res, stored)
     const unsubscribe = bus.subscribe(stored => writeSseEvent(res, stored))
     const heartbeat = setInterval(() => {
@@ -242,6 +293,16 @@ export async function startOfficeServer(options: OfficeServerOptions = {}): Prom
       teamFilePath = sourcePath
       publishRoster()
       return sendJson(res, 200, { path: sourcePath, name: team.name, coworkers: listAgentCoworkers(), skipped: failures })
+    }
+
+    // Everything outside /api is the static web UI.
+    if (method === 'GET' && !path.startsWith('/api/')) {
+      if (path.startsWith('/vendor/')) {
+        if (!threeRoots) return sendJson(res, 404, { error: 'three.js is not installed on the server.' })
+        if (path.startsWith('/vendor/addons/')) return serveStaticFile(res, threeRoots.addons, decodeURIComponent(path.slice('/vendor/addons/'.length)))
+        return serveStaticFile(res, threeRoots.build, decodeURIComponent(path.slice('/vendor/'.length)))
+      }
+      return serveStaticFile(res, WEB_ROOT, decodeURIComponent(path === '/' ? 'index.html' : path))
     }
 
     sendJson(res, 404, { error: `No route for ${method} ${path}.` })

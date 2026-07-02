@@ -124,3 +124,53 @@ describe('office server API', () => {
     expect(response.status).toBe(404)
   })
 })
+
+describe('static web UI', () => {
+  it('serves the web app at the root', async () => {
+    const response = await fetch(`${server.url}/`)
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('text/html')
+    expect(await response.text()).toContain('Agent Office')
+  })
+
+  it('serves the app modules and styles', async () => {
+    for (const path of ['/js/app.js', '/js/scene.js', '/js/api.js']) {
+      const response = await fetch(`${server.url}${path}`)
+      expect(response.status).toBe(200)
+      expect(response.headers.get('content-type')).toContain('text/javascript')
+    }
+    const css = await fetch(`${server.url}/style.css`)
+    expect(css.headers.get('content-type')).toContain('text/css')
+  })
+
+  it('serves three.js from the installed package', async () => {
+    const module = await fetch(`${server.url}/vendor/three.module.js`)
+    expect(module.status).toBe(200)
+    const addon = await fetch(`${server.url}/vendor/addons/controls/OrbitControls.js`)
+    expect(addon.status).toBe(200)
+  })
+
+  it('blocks path traversal out of the static roots', async () => {
+    for (const path of ['/%2e%2e/package.json', '/vendor/%2e%2e/package.json', '/vendor/addons/%2e%2e/%2e%2e/package.json']) {
+      const response = await fetch(`${server.url}${path}`)
+      expect(response.status).toBe(404)
+    }
+  })
+
+  it('resumes the event stream from the Last-Event-ID header', async () => {
+    officeMailbox.send({ from: 'zed', to: 'Human', body: 'resume ping' })
+    await vi.waitFor(() => {
+      expect(officeMailbox.undeliveredFor('Human')).toEqual([])
+    }, { timeout: 3_000 })
+
+    const controller = new AbortController()
+    const response = await fetch(`${server.url}/api/events`, {
+      headers: { accept: 'text/event-stream', 'last-event-id': '0' },
+      signal: controller.signal,
+    })
+    const reader = response.body!.getReader()
+    const { value } = await reader.read()
+    controller.abort()
+    expect(new TextDecoder().decode(value)).toContain('resume ping')
+  })
+})

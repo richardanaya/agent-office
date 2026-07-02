@@ -19,6 +19,7 @@
   },
   "files": [
     "dist",
+    "web",
     "README.md",
     "LICENSE"
   ],
@@ -67,6 +68,7 @@
     "ink": "^7.1.0",
     "react": "^19.2.7",
     "string-width": "^5.1.2",
+    "three": "^0.185.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {

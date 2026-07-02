@@ -41,9 +41,21 @@ From a local checkout:
 npm run dev
 ```
 
+## The web office 🏝️
+
+Every office server also hosts a web view at its URL (e.g. `http://127.0.0.1:4747`): a cozy Animal Crossing-inspired three.js island where each coworker is a villager. They wander the lawn, bob while idle, show a 💭 bubble while thinking, and speak their messages in speech bubbles. The office board shows live kanban counts.
+
+- Type in the dialog bar to talk to the whole office; **click a villager** to DM them.
+- **Click the office board** to open the full kanban view with every task.
+- **🍃 Team** hires and fires coworkers and saves/loads team files.
+- **📜 Log** shows the same live feed as the terminal.
+- When a coworker asks you a question, an Animal Crossing-style dialog pops up with the choices.
+
+It works alongside the terminal UI against the same live session — three.js is served from the package itself, so there's no build step or CDN.
+
 ## Server and clients
 
-The office runs as a small HTTP server; every interface — the terminal UI today, a web UI tomorrow — is a client of the same API. `agent-office` starts an embedded server (default port 4747, override with `AGENT_OFFICE_PORT`) and attaches the terminal UI to it, so you can point other clients at the same live session.
+The office runs as a small HTTP server; every interface — the terminal UI and the web office — is a client of the same API. `agent-office` starts an embedded server (default port 4747, override with `AGENT_OFFICE_PORT`) and attaches the terminal UI to it, so you can point other clients at the same live session.
 
 ```bash
 agent-office serve                        # headless office server
