@@ -303,17 +303,74 @@ $('board-close').addEventListener('click', () => {
 
 // ── Office wiki dialog ───────────────────────────────────────
 
+// Mirrors wikiSlug in src/office/wiki.ts so [[links]] resolve the same way.
+function wikiSlugify(title) {
+  return title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+const WIKI_LINK_PATTERN = /\[\[([^\[\]]+)\]\]/g
+
+function wikiLinkSlugs(content) {
+  return [...content.matchAll(WIKI_LINK_PATTERN)].map(match => wikiSlugify(match[1]))
+}
+
+// 'view' renders [[links]] as clickable navigation; 'edit' shows raw text.
+let wikiMode = 'view'
+let editingWikiSlug = null
+
+function makeWikiLink(title) {
+  const slug = wikiSlugify(title)
+  const target = wiki.find(page => page.slug === slug)
+  const link = document.createElement('button')
+  link.type = 'button'
+  link.className = `wiki-link${target ? '' : ' missing'}`
+  link.title = target ? `Open "${target.title}"` : `"${title}" does not exist yet — click to create it`
+  link.textContent = title
+  link.addEventListener('click', () => {
+    if (target) {
+      selectedWikiSlug = target.slug
+      renderWikiModal()
+    } else {
+      openWikiEditor(null, title)
+    }
+  })
+  return link
+}
+
+function renderWikiBody(container, content) {
+  container.replaceChildren()
+  let last = 0
+  for (const match of content.matchAll(WIKI_LINK_PATTERN)) {
+    if (match.index > last) container.appendChild(document.createTextNode(content.slice(last, match.index)))
+    container.appendChild(makeWikiLink(match[1].trim()))
+    last = match.index + match[0].length
+  }
+  if (last < content.length) container.appendChild(document.createTextNode(content.slice(last)))
+}
+
 function renderWikiModal() {
+  const editing = wikiMode === 'edit'
+  $('wiki-editor').hidden = !editing
+  $('wiki-pages').hidden = editing
+  $('wiki-view-actions').hidden = editing
+  if (editing) {
+    $('wiki-content').hidden = true
+    $('wiki-edit-delete').hidden = editingWikiSlug === null
+    return
+  }
+
   const chips = $('wiki-pages')
   chips.replaceChildren()
   if (wiki.length === 0) {
     const empty = document.createElement('div')
     empty.className = 'wiki-empty'
-    empty.textContent = 'No pages yet. Coworkers write pages here with their wiki tools — ask one to document something!'
+    empty.textContent = 'No pages yet. Coworkers write pages with their wiki tools, or press ➕ New page to start one yourself.'
     chips.appendChild(empty)
     $('wiki-content').hidden = true
+    $('wiki-edit').hidden = true
     return
   }
+  $('wiki-edit').hidden = false
   if (!wiki.some(page => page.slug === selectedWikiSlug)) selectedWikiSlug = wiki[0].slug
   for (const page of wiki) {
     const chip = document.createElement('button')
@@ -326,26 +383,95 @@ function renderWikiModal() {
     })
     chips.appendChild(chip)
   }
+
   const selected = wiki.find(page => page.slug === selectedWikiSlug)
   $('wiki-content').hidden = false
   $('wiki-page-title').textContent = selected.title
   $('wiki-page-meta').textContent = `last edited by ${selected.updatedBy} · ${new Date(selected.updatedAt).toLocaleString()}`
-  $('wiki-page-body').textContent = selected.content
+  renderWikiBody($('wiki-page-body'), selected.content)
+
+  const backlinksBox = $('wiki-backlinks')
+  backlinksBox.replaceChildren()
+  const backlinks = wiki.filter(page => page.slug !== selected.slug && wikiLinkSlugs(page.content).includes(selected.slug))
+  if (backlinks.length > 0) {
+    backlinksBox.appendChild(document.createTextNode('Linked from:'))
+    for (const page of backlinks) backlinksBox.appendChild(makeWikiLink(page.title))
+  }
+}
+
+function openWikiEditor(slug, prefillTitle = '') {
+  const page = slug ? wiki.find(item => item.slug === slug) : undefined
+  wikiMode = 'edit'
+  editingWikiSlug = page ? page.slug : null
+  $('wiki-edit-title').value = page ? page.title : prefillTitle
+  $('wiki-edit-content').value = page ? page.content : ''
+  renderWikiModal()
+  ;(page || !prefillTitle ? $(page ? 'wiki-edit-content' : 'wiki-edit-title') : $('wiki-edit-content')).focus()
+}
+
+function closeWikiEditor() {
+  wikiMode = 'view'
+  editingWikiSlug = null
+  renderWikiModal()
 }
 
 function openWiki() {
+  wikiMode = 'view'
   renderWikiModal()
   $('wiki-modal').hidden = false
 }
 
+$('wiki-new').addEventListener('click', () => openWikiEditor(null))
+$('wiki-edit').addEventListener('click', () => openWikiEditor(selectedWikiSlug))
+$('wiki-edit-cancel').addEventListener('click', closeWikiEditor)
+
+$('wiki-edit-save').addEventListener('click', () => {
+  const title = $('wiki-edit-title').value.trim()
+  const content = $('wiki-edit-content').value.trim()
+  if (!title || !content) {
+    toast('A page needs a title and some content!')
+    return
+  }
+  const previousSlug = editingWikiSlug
+  api.writeWikiPage(title, content)
+    .then(async ({ page }) => {
+      // Changing the title is a rename: drop the page under the old slug.
+      if (previousSlug && previousSlug !== page.slug) await api.deleteWikiPage(previousSlug).catch(() => {})
+      wiki = [...wiki.filter(item => item.slug !== page.slug && item.slug !== previousSlug), page]
+        .sort((a, b) => a.title.localeCompare(b.title))
+      selectedWikiSlug = page.slug
+      toast(`Saved "${page.title}" 📖`)
+      closeWikiEditor()
+      void refreshState()
+    })
+    .catch(error => toast(error.message))
+})
+
+$('wiki-edit-delete').addEventListener('click', () => {
+  if (!editingWikiSlug) return
+  const page = wiki.find(item => item.slug === editingWikiSlug)
+  if (!window.confirm(`Delete wiki page "${page?.title ?? editingWikiSlug}"?`)) return
+  api.deleteWikiPage(editingWikiSlug)
+    .then(({ page: deleted }) => {
+      wiki = wiki.filter(item => item.slug !== deleted.slug)
+      toast(`Deleted "${deleted.title}" 🗑️`)
+      closeWikiEditor()
+      void refreshState()
+    })
+    .catch(error => toast(error.message))
+})
+
 $('wiki-close').addEventListener('click', () => {
+  closeWikiEditor()
   $('wiki-modal').hidden = true
 })
 
 document.addEventListener('keydown', event => {
   if (event.key !== 'Escape') return
-  if (!$('wiki-modal').hidden) $('wiki-modal').hidden = true
-  else if (!$('board-modal').hidden) $('board-modal').hidden = true
+  if (!$('wiki-modal').hidden) {
+    if (wikiMode === 'edit') closeWikiEditor()
+    else $('wiki-modal').hidden = true
+  } else if (!$('board-modal').hidden) $('board-modal').hidden = true
   else if (!$('question-modal').hidden) {
     $('question-modal').hidden = true
     activeQuestion = null

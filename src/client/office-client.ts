@@ -1,6 +1,7 @@
 import type { CoworkerProfile } from '../office/coworkers.js'
 import type { HumanQuestion } from '../office/human-questions.js'
 import type { OfficeMessage } from '../office/mailbox.js'
+import type { WikiPage } from '../office/wiki.js'
 import type { AnswerQuestionRequest, OfficeState, StoredOfficeEvent } from '../protocol.js'
 
 const RECONNECT_DELAY_MS = 2_000
@@ -69,6 +70,14 @@ export class OfficeClient {
 
   rerollAppearance(name: string): Promise<{ profile: CoworkerProfile }> {
     return this.request('POST', `/api/coworkers/${encodeURIComponent(name)}/appearance`)
+  }
+
+  writeWikiPage(title: string, content: string): Promise<{ page: WikiPage }> {
+    return this.request('POST', '/api/wiki', { title, content })
+  }
+
+  deleteWikiPage(slug: string): Promise<{ page: WikiPage }> {
+    return this.request('DELETE', `/api/wiki/${encodeURIComponent(slug)}`)
   }
 
   saveTeam(path: string): Promise<{ path: string; coworkers: CoworkerProfile[] }> {

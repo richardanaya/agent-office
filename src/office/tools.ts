@@ -336,7 +336,7 @@ export function createWriteWikiPageTool(agentName: string) {
   return createTool({
     id: 'write_wiki_page',
     description:
-      'Create or fully overwrite a page in the shared office wiki. Pages are identified by title, so writing an existing title replaces that page. Use the wiki for durable shared knowledge: decisions, plans, reference notes, how-tos.',
+      'Create or fully overwrite a page in the shared office wiki. Pages are identified by title, so writing an existing title replaces that page. Use the wiki for durable shared knowledge: decisions, plans, reference notes, how-tos. Link related pages by writing [[Page Title]] in the content; readers can click those links, and links to pages that do not exist yet invite someone to create them.',
     strict: true,
     inputSchema: z.object({
       title: z.string().trim().min(2).max(120).describe('Page title. Writing an existing title overwrites that page.'),

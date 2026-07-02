@@ -64,14 +64,28 @@
 
   <div id="wiki-modal" class="modal" hidden>
     <div class="modal-card wiki-card">
-      <div class="panel-title">📖 Office wiki</div>
+      <div class="panel-title row">
+        <span>📖 Office wiki</span>
+        <button id="wiki-new" class="mini-button" title="Create a new page">➕ New page</button>
+      </div>
       <div id="wiki-pages"></div>
       <div id="wiki-content" hidden>
         <div id="wiki-page-title" class="wiki-page-title"></div>
         <div id="wiki-page-meta" class="wiki-page-meta"></div>
         <div id="wiki-page-body"></div>
+        <div id="wiki-backlinks" class="wiki-backlinks"></div>
       </div>
-      <div class="modal-actions">
+      <div id="wiki-editor" hidden>
+        <input id="wiki-edit-title" placeholder="Page title" maxlength="120" autocomplete="off">
+        <textarea id="wiki-edit-content" rows="10" placeholder="Page content… link other pages with [[Page Title]]"></textarea>
+        <div class="modal-actions wiki-editor-actions">
+          <button id="wiki-edit-delete" class="chunky subtle" hidden>🗑️ Delete page</button>
+          <button id="wiki-edit-cancel" class="chunky subtle">Cancel</button>
+          <button id="wiki-edit-save" class="chunky">Save page</button>
+        </div>
+      </div>
+      <div class="modal-actions" id="wiki-view-actions">
+        <button id="wiki-edit" class="chunky subtle">✏️ Edit page</button>
         <button id="wiki-close" class="chunky subtle">Close</button>
       </div>
     </div>

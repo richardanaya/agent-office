@@ -24,6 +24,8 @@ export const sendMessage = (to, body) => request('POST', '/api/messages', { to, 
 export const hire = (name, role) => request('POST', '/api/coworkers', { name, role })
 export const fire = name => request('DELETE', `/api/coworkers/${encodeURIComponent(name)}`)
 export const rerollAppearance = name => request('POST', `/api/coworkers/${encodeURIComponent(name)}/appearance`)
+export const writeWikiPage = (title, content) => request('POST', '/api/wiki', { title, content })
+export const deleteWikiPage = slug => request('DELETE', `/api/wiki/${encodeURIComponent(slug)}`)
 export const answerQuestion = (id, answer) => request('POST', `/api/questions/${encodeURIComponent(id)}/answer`, answer)
 export const saveTeam = path => request('POST', '/api/team/save', { path })
 export const loadTeam = path => request('POST', '/api/team/load', { path })

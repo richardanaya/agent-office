@@ -100,6 +100,18 @@ describe('office server API', () => {
     }
   })
 
+  it('lets Human write and delete wiki pages over the API', async () => {
+    const { page } = await client.writeWikiPage('Human Notes', 'See also [[Plant Care]].')
+    expect(page.slug).toBe('human-notes')
+    expect(page.updatedBy).toBe('Human')
+    expect((await client.getState()).wiki.some(item => item.slug === 'human-notes')).toBe(true)
+
+    const { page: deleted } = await client.deleteWikiPage('human-notes')
+    expect(deleted.title).toBe('Human Notes')
+    expect((await client.getState()).wiki.some(item => item.slug === 'human-notes')).toBe(false)
+    await expect(client.deleteWikiPage('human-notes')).rejects.toThrow(/No wiki page/)
+  })
+
   it('rerolls a coworker appearance and persists it in team files', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'agent-office-appearance-'))
     await client.hire('Dicey', 'appearance tester')

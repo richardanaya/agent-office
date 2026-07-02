@@ -266,7 +266,8 @@ textarea {
 
 /* ── Inputs & buttons ────────────────────────────────────── */
 
-input {
+input,
+textarea {
   font-family: inherit;
   font-size: 14px;
   font-weight: 500;
@@ -278,7 +279,13 @@ input {
   outline: none;
 }
 
-input:focus { border-color: var(--leaf); }
+textarea {
+  resize: vertical;
+  min-height: 140px;
+}
+
+input:focus,
+textarea:focus { border-color: var(--leaf); }
 
 .chunky {
   font-family: inherit;
@@ -515,6 +522,46 @@ input:focus { border-color: var(--leaf); }
   -webkit-user-select: text;
   user-select: text;
 }
+
+/* [[Wiki links]] inside page content. */
+.wiki-link {
+  display: inline;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 800;
+  color: var(--leaf-deep);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+.wiki-link:hover { color: var(--leaf); }
+
+.wiki-link.missing {
+  color: var(--red);
+  text-decoration-style: dashed;
+}
+
+.wiki-backlinks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--brown-soft);
+}
+
+#wiki-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#wiki-edit-delete { margin-right: auto; }
 
 /* ── Toast ───────────────────────────────────────────────── */
 

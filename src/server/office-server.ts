@@ -11,7 +11,7 @@ import { fireCoworker, hireCoworker } from '../office/hiring.js'
 import { deliverHumanMessage, listHumanInbox, markAllHumanMessagesSeen } from '../office/human.js'
 import { answerHumanQuestion, listHumanQuestions } from '../office/human-questions.js'
 import { listCoworkerStatuses, listOfficeTasks, replaceOfficeTasks } from '../office/kanban.js'
-import { listWikiPages, replaceWikiPages } from '../office/wiki.js'
+import { deleteWikiPage, listWikiPages, replaceWikiPages, writeWikiPage } from '../office/wiki.js'
 import { loadTeamFile, saveTeamFile, type TeamFile } from '../office/team.js'
 import { coworkerThread } from '../office/threads.js'
 import type { OfficeState, StoredOfficeEvent } from '../protocol.js'
@@ -288,6 +288,20 @@ export async function startOfficeServer(options: OfficeServerOptions = {}): Prom
       const customAnswer = typeof body.customAnswer === 'string' ? body.customAnswer : undefined
       const question = answerHumanQuestion({ id: decodeURIComponent(answerMatch[1]!), selectedChoices, customAnswer })
       return sendJson(res, 200, { question })
+    }
+
+    // Humans edit the wiki through the web UI; agents use their tools.
+    if (method === 'POST' && path === '/api/wiki') {
+      const body = await readJson(req)
+      const page = writeWikiPage({ title: requireString(body, 'title'), content: requireString(body, 'content'), updatedBy: 'Human' })
+      return sendJson(res, 200, { page })
+    }
+
+    const wikiMatch = /^\/api\/wiki\/([^/]+)$/.exec(path)
+    if (method === 'DELETE' && wikiMatch) {
+      const page = deleteWikiPage(decodeURIComponent(wikiMatch[1]!))
+      if (!page) return sendJson(res, 404, { error: `No wiki page ${decodeURIComponent(wikiMatch[1]!)}.` })
+      return sendJson(res, 200, { page })
     }
 
     if (method === 'POST' && path === '/api/team/save') {
