@@ -68,7 +68,7 @@ function toast(text) {
 
 function setChatTarget(name) {
   chatTarget = name
-  $('chat-target').textContent = name === 'All' ? 'To: All 📣' : `To: ${name} ✉️`
+  $('chat-target').textContent = name === 'All' ? 'To ✦ All' : `To ✦ ${name}`
   $('chat-input').placeholder = name === 'All'
     ? 'Say something to the office… (click a villager to DM them)'
     : `Message ${name} privately… (click the chip to talk to everyone)`
@@ -194,7 +194,7 @@ $('toggle-team').addEventListener('click', () => togglePanel('team-panel'))
 function openQuestion(question) {
   activeQuestion = question
   selectedChoices = []
-  $('question-from').textContent = `❓ ${question.from} asks`
+  $('question-from').textContent = `✦ ${question.from} asks`
   $('question-prompt').textContent = question.prompt
   $('question-custom').value = ''
   $('question-custom').hidden = !question.allowCustomAnswer

@@ -1,18 +1,18 @@
-/* Animal Crossing-inspired UI: cream cards, chunky rounded borders, warm
-   brown text, leafy green accents. */
+/* Art deco UI: black lacquer panels, champagne gold trim, double-line
+   frames, chevron bands, and geometric type. */
 
 :root {
-  --cream: #fff8e6;
-  --cream-deep: #f6ecd2;
-  --border: #e3d3a8;
-  --brown: #6b4f2f;
-  --brown-soft: #9b7f5d;
-  --leaf: #78c850;
-  --leaf-deep: #5aa73a;
-  --sky: #aee3f5;
-  --peach: #ffb98a;
-  --red: #e86a5e;
-  --shadow: 0 4px 0 rgba(107, 79, 47, 0.18);
+  --noir: #16161e;
+  --noir-2: #1f1f2a;
+  --noir-3: #2a2a36;
+  --gold: #d4af37;
+  --gold-bright: #e9c962;
+  --gold-dim: #9c8127;
+  --champagne: #f4e8d0;
+  --champagne-dim: #c7b58c;
+  --emerald: #3fae7c;
+  --burgundy: #a4434f;
+  --shadow: 0 6px 18px rgba(8, 8, 14, 0.5);
 }
 
 * {
@@ -29,9 +29,9 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  font-family: 'M PLUS Rounded 1c', ui-rounded, 'Hiragino Maru Gothic ProN', 'Comic Sans MS', system-ui, sans-serif;
-  color: var(--brown);
-  background: var(--sky);
+  font-family: 'Josefin Sans', 'Trebuchet MS', system-ui, sans-serif;
+  color: var(--champagne);
+  background: var(--noir);
   /* Game-like UI: text is not selectable (inputs re-enable it below). */
   -webkit-user-select: none;
   user-select: none;
@@ -66,62 +66,69 @@ textarea {
 
 .badge {
   pointer-events: auto;
-  background: var(--cream);
-  border: 3px solid var(--border);
-  border-radius: 999px;
-  padding: 6px 16px;
-  font-weight: 800;
-  font-size: 15px;
-  box-shadow: var(--shadow);
+  background: linear-gradient(180deg, var(--noir-2), var(--noir));
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  padding: 8px 16px 6px;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--champagne);
+  box-shadow: var(--shadow), inset 0 0 0 1px rgba(212, 175, 55, 0.18);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .title-badge {
-  background: var(--leaf);
-  color: #fff;
-  border-color: var(--leaf-deep);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.15);
+  font-family: 'Poiret One', 'Josefin Sans', sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 4px;
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold-dim));
+  color: var(--noir);
+  border-color: var(--gold-dim);
+  text-shadow: 0 1px 0 rgba(255, 244, 214, 0.4);
 }
 
 .button-badge {
   cursor: pointer;
   font-family: inherit;
-  color: var(--brown);
 }
 
 .button-badge:hover {
-  transform: translateY(-1px);
+  border-color: var(--gold-bright);
+  color: var(--gold-bright);
 }
 
 .button-badge:active {
   transform: translateY(1px);
-  box-shadow: 0 2px 0 rgba(107, 79, 47, 0.18);
 }
 
 #questions-button {
-  background: var(--peach);
-  border-color: #e69a63;
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold-dim));
+  color: var(--noir);
+  border-color: var(--gold-dim);
   animation: wiggle 1.6s ease-in-out infinite;
 }
 
 @keyframes wiggle {
   0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(-3deg) scale(1.04); }
-  75% { transform: rotate(3deg) scale(1.04); }
+  25% { transform: rotate(-2deg) scale(1.03); }
+  75% { transform: rotate(2deg) scale(1.03); }
 }
 
 .dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #cfc4a4;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  background: var(--champagne-dim);
   display: inline-block;
 }
 
-.dot.connected { background: var(--leaf); }
-.dot.disconnected { background: var(--red); }
+.dot.connected { background: var(--emerald); }
+.dot.disconnected { background: var(--burgundy); }
 
 /* ── Panels ──────────────────────────────────────────────── */
 
@@ -131,10 +138,10 @@ textarea {
   width: 340px;
   max-height: calc(100vh - 170px);
   overflow-y: auto;
-  background: var(--cream);
-  border: 3px solid var(--border);
-  border-radius: 22px;
-  box-shadow: var(--shadow);
+  background: linear-gradient(180deg, var(--noir-2), var(--noir));
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  box-shadow: var(--shadow), inset 0 0 0 1px rgba(212, 175, 55, 0.14);
   padding: 14px 16px;
   z-index: 9;
 }
@@ -143,11 +150,26 @@ textarea {
 #team-panel { right: 14px; }
 
 .panel-title {
-  font-weight: 800;
+  font-family: 'Poiret One', 'Josefin Sans', sans-serif;
+  font-weight: 400;
   font-size: 17px;
-  border-bottom: 3px dotted var(--border);
-  padding-bottom: 6px;
-  margin-bottom: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold);
+  border-bottom: 1px solid var(--gold-dim);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.panel-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 1px;
+  background: rgba(212, 175, 55, 0.35);
 }
 
 .panel-title.row {
@@ -158,18 +180,23 @@ textarea {
 }
 
 .mini-button {
-  font-family: inherit;
-  font-weight: 800;
-  font-size: 12px;
-  color: var(--brown);
-  background: var(--cream-deep);
-  border: 2px solid var(--border);
-  border-radius: 999px;
-  padding: 3px 10px;
+  font-family: 'Josefin Sans', sans-serif;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: transparent;
+  border: 1px solid var(--gold-dim);
+  border-radius: 4px;
+  padding: 4px 10px 3px;
   cursor: pointer;
 }
 
-.mini-button:hover { background: #efe2c2; }
+.mini-button:hover {
+  color: var(--noir);
+  background: var(--gold);
+}
 
 .mini-button:active { transform: translateY(1px); }
 
@@ -177,22 +204,24 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13.5px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .log-line {
-  background: var(--cream-deep);
-  border-radius: 12px;
-  padding: 5px 10px;
+  background: var(--noir-2);
+  border-left: 2px solid var(--noir-3);
+  border-radius: 3px;
+  padding: 6px 10px 4px;
   overflow-wrap: anywhere;
+  color: var(--champagne);
 }
 
-.log-line.chat { background: #e7f6df; }
-.log-line.you { background: #ddf1fa; }
-.log-line.question { background: #ffe9d6; }
-.log-line.error { background: #fadfdc; color: var(--red); }
-.log-line.muted { color: var(--brown-soft); }
+.log-line.chat { border-left-color: var(--emerald); }
+.log-line.you { border-left-color: var(--gold); }
+.log-line.question { border-left-color: var(--gold-bright); background: rgba(212, 175, 55, 0.08); }
+.log-line.error { border-left-color: var(--burgundy); background: rgba(164, 67, 79, 0.12); color: #e8a7ae; }
+.log-line.muted { color: var(--champagne-dim); }
 
 /* ── Team panel ──────────────────────────────────────────── */
 
@@ -209,16 +238,17 @@ textarea {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: var(--cream-deep);
-  border-radius: 14px;
+  background: var(--noir-2);
+  border: 1px solid var(--noir-3);
+  border-radius: 6px;
   padding: 8px 10px;
 }
 
 #team-list .swatch {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid rgba(107, 79, 47, 0.25);
+  width: 16px;
+  height: 16px;
+  transform: rotate(45deg);
+  border: 1px solid var(--gold-dim);
   flex-shrink: 0;
 }
 
@@ -228,12 +258,14 @@ textarea {
 }
 
 #team-list .who .name {
-  font-weight: 800;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--champagne);
 }
 
 #team-list .who .role {
   font-size: 12px;
-  color: var(--brown-soft);
+  color: var(--champagne-dim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -244,7 +276,7 @@ textarea {
   background: none;
   cursor: pointer;
   font-size: 15px;
-  opacity: 0.6;
+  opacity: 0.55;
   padding: 2px;
 }
 
@@ -268,15 +300,20 @@ textarea {
 
 input,
 textarea {
-  font-family: inherit;
+  font-family: 'Josefin Sans', sans-serif;
   font-size: 14px;
-  font-weight: 500;
-  color: var(--brown);
-  background: #fff;
-  border: 3px solid var(--border);
-  border-radius: 14px;
-  padding: 9px 14px;
+  font-weight: 400;
+  color: var(--champagne);
+  background: #101018;
+  border: 1px solid var(--gold-dim);
+  border-radius: 6px;
+  padding: 10px 14px 8px;
   outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(199, 181, 140, 0.55);
 }
 
 textarea {
@@ -285,22 +322,24 @@ textarea {
 }
 
 input:focus,
-textarea:focus { border-color: var(--leaf); }
+textarea:focus { border-color: var(--gold-bright); }
 
 .chunky {
-  font-family: inherit;
-  font-weight: 800;
-  font-size: 14px;
-  color: #fff;
-  background: var(--leaf);
-  border: 3px solid var(--leaf-deep);
-  border-radius: 14px;
-  padding: 9px 16px;
+  font-family: 'Josefin Sans', sans-serif;
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--noir);
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold-dim));
+  border: 1px solid var(--gold-dim);
+  border-radius: 6px;
+  padding: 10px 16px 8px;
   cursor: pointer;
   box-shadow: var(--shadow);
 }
 
-.chunky:hover { filter: brightness(1.05); }
+.chunky:hover { filter: brightness(1.1); }
 
 .chunky:active {
   transform: translateY(2px);
@@ -308,14 +347,21 @@ textarea:focus { border-color: var(--leaf); }
 }
 
 .chunky.subtle {
-  background: var(--cream-deep);
-  border-color: var(--border);
-  color: var(--brown);
+  background: transparent;
+  border-color: var(--gold-dim);
+  color: var(--gold);
+  box-shadow: none;
+}
+
+.chunky.subtle:hover {
+  border-color: var(--gold-bright);
+  color: var(--gold-bright);
 }
 
 .chunky.target {
-  background: var(--peach);
-  border-color: #e69a63;
+  background: linear-gradient(180deg, #b3505c, #7c333d);
+  border-color: #5f2830;
+  color: var(--champagne);
   white-space: nowrap;
 }
 
@@ -329,22 +375,22 @@ textarea:focus { border-color: var(--leaf); }
   width: min(720px, calc(100vw - 28px));
   display: flex;
   gap: 8px;
-  background: var(--cream);
-  border: 3px solid var(--border);
-  border-radius: 22px;
-  box-shadow: var(--shadow);
+  background: linear-gradient(180deg, var(--noir-2), var(--noir));
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  box-shadow: var(--shadow), inset 0 0 0 1px rgba(212, 175, 55, 0.14);
   padding: 10px;
   z-index: 10;
 }
 
 #chat-input { flex: 1; }
 
-/* ── Question modal ──────────────────────────────────────── */
+/* ── Modals ──────────────────────────────────────────────── */
 
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(107, 79, 47, 0.25);
+  background: rgba(10, 10, 16, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -353,19 +399,34 @@ textarea:focus { border-color: var(--leaf); }
 
 .modal-card {
   width: min(460px, calc(100vw - 40px));
-  background: var(--cream);
-  border: 4px solid var(--border);
-  border-radius: 26px;
-  box-shadow: var(--shadow);
+  background: linear-gradient(180deg, var(--noir-2), var(--noir));
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  box-shadow: var(--shadow), inset 0 0 0 1px rgba(212, 175, 55, 0.14);
   padding: 18px 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
+/* Chevron band across the top of every dialog. */
+.modal-card::before {
+  content: '';
+  display: block;
+  height: 7px;
+  margin: -18px -20px 4px;
+  border-radius: 7px 7px 0 0;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--gold) 0 7px,
+    var(--noir-3) 7px 14px
+  );
+}
+
 #question-prompt {
   margin: 0;
-  font-weight: 500;
+  font-weight: 400;
+  color: var(--champagne);
 }
 
 #question-choices {
@@ -375,21 +436,24 @@ textarea:focus { border-color: var(--leaf); }
 }
 
 .choice {
-  font-family: inherit;
-  font-weight: 700;
+  font-family: 'Josefin Sans', sans-serif;
+  font-weight: 600;
   font-size: 14px;
   text-align: left;
-  color: var(--brown);
-  background: var(--cream-deep);
-  border: 3px solid var(--border);
-  border-radius: 14px;
-  padding: 9px 14px;
+  color: var(--champagne);
+  background: var(--noir-2);
+  border: 1px solid var(--noir-3);
+  border-radius: 6px;
+  padding: 10px 14px 8px;
   cursor: pointer;
 }
 
+.choice:hover { border-color: var(--gold-dim); }
+
 .choice.selected {
-  background: #e7f6df;
-  border-color: var(--leaf);
+  background: rgba(212, 175, 55, 0.14);
+  border-color: var(--gold);
+  color: var(--gold-bright);
 }
 
 .modal-actions {
@@ -413,9 +477,9 @@ textarea:focus { border-color: var(--leaf); }
 }
 
 .board-column {
-  background: var(--cream-deep);
-  border: 3px solid var(--border);
-  border-radius: 16px;
+  background: var(--noir-2);
+  border: 1px solid var(--noir-3);
+  border-radius: 6px;
   padding: 8px;
   display: flex;
   flex-direction: column;
@@ -424,41 +488,45 @@ textarea:focus { border-color: var(--leaf); }
 }
 
 .board-column > header {
-  font-weight: 800;
-  font-size: 13px;
-  text-transform: capitalize;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
   text-align: center;
-  border-bottom: 2px dotted var(--border);
-  padding-bottom: 4px;
+  color: var(--gold);
+  border-bottom: 1px solid var(--gold-dim);
+  padding-bottom: 5px;
 }
 
 .board-column .empty {
-  color: var(--brown-soft);
+  color: var(--champagne-dim);
   font-size: 12px;
   text-align: center;
   margin-top: 12px;
 }
 
 .task-card {
-  background: #fff;
-  border: 2px solid var(--border);
-  border-radius: 10px;
-  padding: 6px 8px;
+  background: #101018;
+  border: 1px solid var(--noir-3);
+  border-left: 2px solid var(--gold-dim);
+  border-radius: 4px;
+  padding: 7px 8px 5px;
   font-size: 12.5px;
 }
 
 .task-card .task-title {
   font-weight: 700;
   overflow-wrap: anywhere;
+  color: var(--champagne);
 }
 
 .task-card .task-meta {
-  color: var(--brown-soft);
+  color: var(--champagne-dim);
   font-size: 11px;
 }
 
-.task-card.priority-high { border-color: var(--peach); }
-.task-card.priority-urgent { border-color: var(--red); }
+.task-card.priority-high { border-left-color: var(--gold-bright); }
+.task-card.priority-urgent { border-left-color: var(--burgundy); }
 
 /* ── Office wiki modal ───────────────────────────────────── */
 
@@ -475,46 +543,54 @@ textarea:focus { border-color: var(--leaf); }
 }
 
 .wiki-page-chip {
-  font-family: inherit;
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--brown);
-  background: var(--cream-deep);
-  border: 2px solid var(--border);
-  border-radius: 999px;
-  padding: 5px 12px;
+  font-family: 'Josefin Sans', sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--champagne);
+  background: var(--noir-2);
+  border: 1px solid var(--noir-3);
+  border-radius: 4px;
+  padding: 6px 12px 4px;
   cursor: pointer;
 }
 
+.wiki-page-chip:hover { border-color: var(--gold-dim); }
+
 .wiki-page-chip.selected {
-  background: #e7f6df;
-  border-color: var(--leaf);
+  background: rgba(212, 175, 55, 0.14);
+  border-color: var(--gold);
+  color: var(--gold-bright);
 }
 
 .wiki-empty {
-  color: var(--brown-soft);
+  color: var(--champagne-dim);
   font-size: 13.5px;
 }
 
 .wiki-page-title {
-  font-weight: 800;
-  font-size: 16px;
+  font-family: 'Poiret One', 'Josefin Sans', sans-serif;
+  font-weight: 400;
+  font-size: 18px;
+  letter-spacing: 2px;
+  color: var(--gold);
   margin-top: 4px;
 }
 
 .wiki-page-meta {
-  color: var(--brown-soft);
+  color: var(--champagne-dim);
   font-size: 12px;
   margin-bottom: 6px;
 }
 
 #wiki-page-body {
-  background: #fff;
-  border: 2px solid var(--border);
-  border-radius: 14px;
-  padding: 10px 14px;
+  background: #101018;
+  border: 1px solid var(--noir-3);
+  border-radius: 6px;
+  padding: 12px 14px;
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 400;
+  color: var(--champagne);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   max-height: 46vh;
@@ -528,20 +604,21 @@ textarea:focus { border-color: var(--leaf); }
   display: inline;
   font-family: inherit;
   font-size: inherit;
-  font-weight: 800;
-  color: var(--leaf-deep);
+  font-weight: 700;
+  color: var(--gold);
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
   text-decoration: underline;
-  text-decoration-thickness: 2px;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
-.wiki-link:hover { color: var(--leaf); }
+.wiki-link:hover { color: var(--gold-bright); }
 
 .wiki-link.missing {
-  color: var(--red);
+  color: var(--burgundy);
   text-decoration-style: dashed;
 }
 
@@ -552,7 +629,7 @@ textarea:focus { border-color: var(--leaf); }
   gap: 6px;
   margin-top: 8px;
   font-size: 12px;
-  color: var(--brown-soft);
+  color: var(--champagne-dim);
 }
 
 #wiki-editor {
@@ -570,12 +647,14 @@ textarea:focus { border-color: var(--leaf); }
   left: 50%;
   bottom: 86px;
   transform: translateX(-50%);
-  background: var(--brown);
-  color: var(--cream);
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold-dim));
+  color: var(--noir);
   font-weight: 700;
-  font-size: 14px;
-  border-radius: 999px;
-  padding: 8px 18px;
+  font-size: 13px;
+  letter-spacing: 1px;
+  border: 1px solid var(--gold-dim);
+  border-radius: 6px;
+  padding: 9px 18px 7px;
   z-index: 30;
   box-shadow: var(--shadow);
 }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Agent Office</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poiret+One&family=Josefin+Sans:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
   <script type="importmap">
     {
@@ -20,23 +20,23 @@
   <div id="scene-container"></div>
 
   <header id="topbar">
-    <div class="badge title-badge">🏝️ Agent Office</div>
+    <div class="badge title-badge">✦ Agent Office ✦</div>
     <div class="badge" id="connection-badge"><span id="connection-dot" class="dot"></span><span id="connection-label">connecting…</span></div>
-    <button class="badge button-badge" id="toggle-log">📜 Log</button>
-    <button class="badge button-badge" id="toggle-team">🍃 Team</button>
-    <button class="badge button-badge" id="questions-button" hidden>❓ <span id="questions-count">0</span></button>
+    <button class="badge button-badge" id="toggle-log">❖ Log</button>
+    <button class="badge button-badge" id="toggle-team">❖ Team</button>
+    <button class="badge button-badge" id="questions-button" hidden>✦ <span id="questions-count">0</span></button>
   </header>
 
   <aside id="log-panel" class="panel" hidden>
     <div class="panel-title row">
-      <span>📜 Office log</span>
-      <button id="copy-log" class="mini-button" title="Copy the whole log">📋 Copy</button>
+      <span>❖ Office log</span>
+      <button id="copy-log" class="mini-button" title="Copy the whole log">Copy</button>
     </div>
     <div id="log-lines"></div>
   </aside>
 
   <aside id="team-panel" class="panel" hidden>
-    <div class="panel-title">🍃 Your team</div>
+    <div class="panel-title">❖ Your team</div>
     <ul id="team-list"></ul>
     <form id="hire-form">
       <input id="hire-name" placeholder="Name" maxlength="32" autocomplete="off">
@@ -65,8 +65,8 @@
   <div id="wiki-modal" class="modal" hidden>
     <div class="modal-card wiki-card">
       <div class="panel-title row">
-        <span>📖 Office wiki</span>
-        <button id="wiki-new" class="mini-button" title="Create a new page">➕ New page</button>
+        <span>❖ Office wiki</span>
+        <button id="wiki-new" class="mini-button" title="Create a new page">＋ New page</button>
       </div>
       <div id="wiki-pages"></div>
       <div id="wiki-content" hidden>
@@ -93,7 +93,7 @@
 
   <div id="board-modal" class="modal" hidden>
     <div class="modal-card board-card">
-      <div class="panel-title">📌 Office board</div>
+      <div class="panel-title">❖ Office board</div>
       <div id="board-columns"></div>
       <div class="modal-actions">
         <button id="board-close" class="chunky subtle">Close</button>

@@ -8,7 +8,7 @@ const PALETTE = ['#ff9f9f', '#ffc38a', '#f7e07e', '#9fe08f', '#8fd8e8', '#9fb8ff
 const GRASS_RADIUS = 26
 const WANDER_RADIUS = 8
 
-const BUBBLE_FONT = '700 34px "M PLUS Rounded 1c", sans-serif'
+const BUBBLE_FONT = '700 34px "Josefin Sans", sans-serif'
 const BUBBLE_MAX_TEXT_WIDTH = 520
 const BUBBLE_MAX_LINES = 4
 const BUBBLE_LINE_HEIGHT = 44
@@ -123,7 +123,7 @@ function makeCanvasSprite(width, height, worldWidth) {
 // Sets ctx.font as a side effect so the caller can fillText directly.
 function fitText(ctx, text, maxWidth, weight, baseSize, minSize) {
   for (let size = baseSize; size >= minSize; size -= 2) {
-    ctx.font = `${weight} ${size}px "M PLUS Rounded 1c", sans-serif`
+    ctx.font = `${weight} ${size}px "Josefin Sans", sans-serif`
     if (ctx.measureText(text).width <= maxWidth) return text
   }
   let trimmed = text
@@ -138,25 +138,35 @@ function drawNameTag(tag, name, color, status) {
   const maxTextWidth = canvas.width - 72
   ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-  ctx.font = '500 30px "M PLUS Rounded 1c", sans-serif'
+  ctx.font = '500 30px "Josefin Sans", sans-serif'
   const statusLines = status ? wrapBubbleLines(ctx, status, maxTextWidth, 2) : []
   const cardHeight = 88 + statusLines.length * 34
 
-  ctx.fillStyle = 'rgba(255, 248, 230, 0.92)'
-  ctx.strokeStyle = color
-  ctx.lineWidth = 10
-  roundedRect(ctx, 8, 8, canvas.width - 16, cardHeight - 16, 40)
+  ctx.fillStyle = 'rgba(22, 22, 30, 0.92)'
+  ctx.strokeStyle = '#d4af37'
+  ctx.lineWidth = 8
+  roundedRect(ctx, 8, 8, canvas.width - 16, cardHeight - 16, 22)
   ctx.fill()
   ctx.stroke()
 
-  ctx.fillStyle = '#6b4f2f'
+  // Villager-colored deco diamonds flank the name.
+  ctx.fillStyle = color
+  for (const x of [42, canvas.width - 42]) {
+    ctx.save()
+    ctx.translate(x, 48)
+    ctx.rotate(Math.PI / 4)
+    ctx.fillRect(-8, -8, 16, 16)
+    ctx.restore()
+  }
+
+  ctx.fillStyle = '#f4e8d0'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  const fittedName = fitText(ctx, name, maxTextWidth, '800', statusLines.length > 0 ? 46 : 52, 30)
+  const fittedName = fitText(ctx, name, maxTextWidth - 60, '700', statusLines.length > 0 ? 44 : 48, 30)
   ctx.fillText(fittedName, canvas.width / 2, 48)
 
-  ctx.fillStyle = '#9b7f5d'
-  ctx.font = '500 30px "M PLUS Rounded 1c", sans-serif'
+  ctx.fillStyle = '#c7b58c'
+  ctx.font = '500 30px "Josefin Sans", sans-serif'
   statusLines.forEach((line, index) => {
     ctx.fillText(line, canvas.width / 2, 92 + index * 34)
   })
@@ -213,10 +223,10 @@ function drawBubble(bubble, text) {
   const bodyBottom = canvas.height - BUBBLE_TAIL
   const top = bodyBottom - bodyHeight
 
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.96)'
-  ctx.strokeStyle = '#e3d3a8'
+  ctx.fillStyle = 'rgba(244, 232, 208, 0.97)'
+  ctx.strokeStyle = '#b8912c'
   ctx.lineWidth = 8
-  roundedRect(ctx, left, top, bubbleWidth, bodyHeight, 30)
+  roundedRect(ctx, left, top, bubbleWidth, bodyHeight, 24)
   ctx.fill()
   ctx.stroke()
   // Tail below the body: fill a wedge over the border to open the gap, then
@@ -233,7 +243,7 @@ function drawBubble(bubble, text) {
   ctx.lineTo(centerX + 24, bodyBottom - 5)
   ctx.stroke()
 
-  ctx.fillStyle = '#6b4f2f'
+  ctx.fillStyle = '#1d1d28'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   const centerY = top + bodyHeight / 2
@@ -252,8 +262,8 @@ function getThinkingMaterial() {
   canvas.width = 192
   canvas.height = 160
   const ctx = canvas.getContext('2d')
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.96)'
-  ctx.strokeStyle = '#e3d3a8'
+  ctx.fillStyle = 'rgba(244, 232, 208, 0.97)'
+  ctx.strokeStyle = '#b8912c'
   ctx.lineWidth = 6
   roundedRect(ctx, 6, 6, 180, 96, 40)
   ctx.fill()
@@ -264,7 +274,7 @@ function getThinkingMaterial() {
     ctx.fill()
     ctx.stroke()
   }
-  ctx.fillStyle = '#9b7f5d'
+  ctx.fillStyle = '#9c8127'
   for (const x of [64, 96, 128]) {
     ctx.beginPath()
     ctx.arc(x, 54, 8, 0, Math.PI * 2)
@@ -345,19 +355,40 @@ function addFlower(x, z) {
   scene.add(flower)
 }
 
+// Gold trim, stepped skyscraper crown, and a finial — the deco treatment
+// shared by the board and wiki stands.
+function addDecoCrown(group, width, height, y) {
+  const gold = toon('#d4af37')
+  const trim = new THREE.Mesh(new THREE.BoxGeometry(width + 0.18, height + 0.18, 0.06), gold)
+  trim.position.set(0, y, -0.05)
+  group.add(trim)
+  let stepY = y + height / 2 + 0.09
+  for (const [stepWidth, stepHeight] of [[width * 0.52, 0.12], [width * 0.28, 0.1]]) {
+    const step = new THREE.Mesh(new THREE.BoxGeometry(stepWidth, stepHeight, 0.16), gold)
+    stepY += stepHeight / 2
+    step.position.set(0, stepY, 0)
+    group.add(step)
+    stepY += stepHeight / 2
+  }
+  const finial = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), gold)
+  finial.position.set(0, stepY + 0.07, 0)
+  group.add(finial)
+}
+
 function addKanbanBoard() {
   const board = new THREE.Group()
-  const legMaterial = toon('#9a6b43')
+  const legMaterial = toon('#23232e')
   for (const side of [-1.3, 1.3]) {
     const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 2.2, 8), legMaterial)
     leg.position.set(side, 1.1, 0)
     leg.castShadow = true
     board.add(leg)
   }
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.9, 0.14), toon('#b98a5d'))
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.9, 0.14), toon('#2a2a36'))
   frame.position.y = 2.1
   frame.castShadow = true
   board.add(frame)
+  addDecoCrown(board, 3.2, 1.9, 2.1)
 
   boardCanvas = document.createElement('canvas')
   boardCanvas.width = 512
@@ -383,17 +414,18 @@ function addKanbanBoard() {
 
 function addWikiStand() {
   const stand = new THREE.Group()
-  const legMaterial = toon('#9a6b43')
+  const legMaterial = toon('#23232e')
   for (const side of [-1.1, 1.1]) {
     const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 2.0, 8), legMaterial)
     leg.position.set(side, 1.0, 0)
     leg.castShadow = true
     stand.add(leg)
   }
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.8, 0.14), toon('#8fb2d9'))
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.8, 0.14), toon('#2a2a36'))
   frame.position.y = 1.95
   frame.castShadow = true
   stand.add(frame)
+  addDecoCrown(stand, 2.8, 1.8, 1.95)
 
   wikiCanvas = document.createElement('canvas')
   wikiCanvas.width = 512
@@ -420,22 +452,26 @@ function addWikiStand() {
 export function updateWiki(pages) {
   if (!wikiCanvas) return
   const ctx = wikiCanvas.getContext('2d')
-  ctx.fillStyle = '#eef6ff'
+  ctx.fillStyle = '#1c1c26'
   ctx.fillRect(0, 0, wikiCanvas.width, wikiCanvas.height)
-  ctx.fillStyle = '#3e5c7a'
+  ctx.strokeStyle = '#d4af37'
+  ctx.lineWidth = 4
+  ctx.strokeRect(10, 10, wikiCanvas.width - 20, wikiCanvas.height - 20)
+  ctx.fillStyle = '#d4af37'
   ctx.textAlign = 'center'
-  ctx.font = '800 44px "M PLUS Rounded 1c", sans-serif'
-  ctx.fillText('📖 Office wiki', wikiCanvas.width / 2, 56)
-  ctx.font = '600 28px "M PLUS Rounded 1c", sans-serif'
+  ctx.font = '400 42px "Poiret One", "Josefin Sans", sans-serif'
+  ctx.fillText('✦ OFFICE WIKI ✦', wikiCanvas.width / 2, 58)
+  ctx.fillStyle = '#f4e8d0'
+  ctx.font = '600 28px "Josefin Sans", sans-serif'
   if (pages.length === 0) {
     ctx.fillText('no pages yet', wikiCanvas.width / 2, 120)
   } else {
     ctx.fillText(`${pages.length} page${pages.length === 1 ? '' : 's'}`, wikiCanvas.width / 2, 104)
     ctx.textAlign = 'left'
     for (const [index, page] of pages.slice(0, 4).entries()) {
-      let title = `• ${page.title}`
+      let title = `◆ ${page.title}`
       while (title.length > 3 && ctx.measureText(title).width > wikiCanvas.width - 72) title = title.slice(0, -1)
-      ctx.fillText(title, 40, 152 + index * 38)
+      ctx.fillText(title, 44, 152 + index * 38)
     }
   }
   wikiTexture.needsUpdate = true
@@ -444,19 +480,77 @@ export function updateWiki(pages) {
 export function updateBoard(tasks) {
   if (!boardCanvas) return
   const ctx = boardCanvas.getContext('2d')
-  ctx.fillStyle = '#fff3d6'
+  ctx.fillStyle = '#1c1c26'
   ctx.fillRect(0, 0, boardCanvas.width, boardCanvas.height)
-  ctx.fillStyle = '#6b4f2f'
+  ctx.strokeStyle = '#d4af37'
+  ctx.lineWidth = 4
+  ctx.strokeRect(10, 10, boardCanvas.width - 20, boardCanvas.height - 20)
+  ctx.fillStyle = '#d4af37'
   ctx.textAlign = 'center'
-  ctx.font = '800 44px "M PLUS Rounded 1c", sans-serif'
-  ctx.fillText('📌 Office board', boardCanvas.width / 2, 56)
-  ctx.font = '600 30px "M PLUS Rounded 1c", sans-serif'
+  ctx.font = '400 42px "Poiret One", "Josefin Sans", sans-serif'
+  ctx.fillText('✦ OFFICE BOARD ✦', boardCanvas.width / 2, 58)
+  ctx.fillStyle = '#f4e8d0'
+  ctx.font = '600 30px "Josefin Sans", sans-serif'
   const columns = ['todo', 'doing', 'blocked', 'review', 'done']
   columns.forEach((column, index) => {
     const count = tasks.filter(task => task.status === column).length
-    ctx.fillText(`${column}: ${count}`, boardCanvas.width / 2, 112 + index * 38)
+    ctx.fillText(`${column} · ${count}`, boardCanvas.width / 2, 112 + index * 38)
   })
   boardTexture.needsUpdate = true
+}
+
+// A gold-and-champagne sunburst medallion at the center of the lawn.
+function makePlazaTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 512
+  canvas.height = 512
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#e9dcba'
+  ctx.beginPath()
+  ctx.arc(256, 256, 256, 0, Math.PI * 2)
+  ctx.fill()
+  const rays = 24
+  ctx.fillStyle = '#d2bd85'
+  for (let index = 0; index < rays; index += 2) {
+    ctx.beginPath()
+    ctx.moveTo(256, 256)
+    ctx.arc(256, 256, 256, (index / rays) * Math.PI * 2, ((index + 1) / rays) * Math.PI * 2)
+    ctx.closePath()
+    ctx.fill()
+  }
+  ctx.strokeStyle = '#a8842e'
+  for (const [radius, width] of [[244, 8], [150, 3], [64, 3]]) {
+    ctx.lineWidth = width
+    ctx.beginPath()
+    ctx.arc(256, 256, radius, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+  ctx.fillStyle = '#a8842e'
+  ctx.beginPath()
+  ctx.arc(256, 256, 26, 0, Math.PI * 2)
+  ctx.fill()
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
+}
+
+function addLampPost(x, z) {
+  const lamp = new THREE.Group()
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 2.4, 8), toon('#23232e'))
+  pole.position.y = 1.2
+  pole.castShadow = true
+  lamp.add(pole)
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.08, 8), toon('#d4af37'))
+  collar.position.y = 2.36
+  lamp.add(collar)
+  const globe = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), new THREE.MeshBasicMaterial({ color: '#ffe9a8' }))
+  globe.position.y = 2.55
+  lamp.add(globe)
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.14, 8), toon('#d4af37'))
+  tip.position.y = 2.78
+  lamp.add(tip)
+  lamp.position.set(x, 0, z)
+  scene.add(lamp)
 }
 
 function addClouds() {
@@ -909,6 +1003,14 @@ export function initScene({ container, onVillagerClick, onBoardClick, onWikiClic
     const distance = 9 + Math.random() * 9
     addFlower(Math.cos(angle) * distance, Math.sin(angle) * distance)
   }
+  const plaza = new THREE.Mesh(new THREE.CircleGeometry(4.6, 48), new THREE.MeshToonMaterial({ map: makePlazaTexture() }))
+  plaza.rotation.x = -Math.PI / 2
+  plaza.position.y = 0.01
+  plaza.receiveShadow = true
+  scene.add(plaza)
+
+  for (const [x, z] of [[-5.5, 5.5], [5.5, 5.5], [-8.5, 0.5], [8.5, 0.5]]) addLampPost(x, z)
+
   addKanbanBoard()
   addWikiStand()
   addClouds()
