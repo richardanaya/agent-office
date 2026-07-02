@@ -32,6 +32,14 @@ body {
   font-family: 'M PLUS Rounded 1c', ui-rounded, 'Hiragino Maru Gothic ProN', 'Comic Sans MS', system-ui, sans-serif;
   color: var(--brown);
   background: var(--sky);
+  /* Game-like UI: text is not selectable (inputs re-enable it below). */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 #scene-container,
