@@ -35,10 +35,14 @@ let lastFrameAt = 0
 let boardTexture
 let boardCanvas
 let boardGroup
+let wikiTexture
+let wikiCanvas
+let wikiGroup
 const villagers = new Map()
 const clouds = []
 let villagerClickHandler = () => {}
 let boardClickHandler = () => {}
+let wikiClickHandler = () => {}
 
 // Animal Crossing-style villager traits, all derived from the seed. Humans
 // are one species among the animals; for them the fur color is hair color.
@@ -375,6 +379,66 @@ function addKanbanBoard() {
   boardGroup = board
   scene.add(board)
   updateBoard([])
+}
+
+function addWikiStand() {
+  const stand = new THREE.Group()
+  const legMaterial = toon('#9a6b43')
+  for (const side of [-1.1, 1.1]) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 2.0, 8), legMaterial)
+    leg.position.set(side, 1.0, 0)
+    leg.castShadow = true
+    stand.add(leg)
+  }
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.8, 0.14), toon('#8fb2d9'))
+  frame.position.y = 1.95
+  frame.castShadow = true
+  stand.add(frame)
+
+  wikiCanvas = document.createElement('canvas')
+  wikiCanvas.width = 512
+  wikiCanvas.height = 320
+  wikiTexture = new THREE.CanvasTexture(wikiCanvas)
+  wikiTexture.colorSpace = THREE.SRGBColorSpace
+  const face = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.56, 1.6),
+    new THREE.MeshBasicMaterial({ map: wikiTexture }),
+  )
+  face.position.set(0, 1.95, 0.078)
+  stand.add(face)
+
+  stand.position.set(6.5, 0, -6.5)
+  stand.rotation.y = -Math.PI / 5
+  stand.traverse(object => {
+    object.userData.isWiki = true
+  })
+  wikiGroup = stand
+  scene.add(stand)
+  updateWiki([])
+}
+
+export function updateWiki(pages) {
+  if (!wikiCanvas) return
+  const ctx = wikiCanvas.getContext('2d')
+  ctx.fillStyle = '#eef6ff'
+  ctx.fillRect(0, 0, wikiCanvas.width, wikiCanvas.height)
+  ctx.fillStyle = '#3e5c7a'
+  ctx.textAlign = 'center'
+  ctx.font = '800 44px "M PLUS Rounded 1c", sans-serif'
+  ctx.fillText('📖 Office wiki', wikiCanvas.width / 2, 56)
+  ctx.font = '600 28px "M PLUS Rounded 1c", sans-serif'
+  if (pages.length === 0) {
+    ctx.fillText('no pages yet', wikiCanvas.width / 2, 120)
+  } else {
+    ctx.fillText(`${pages.length} page${pages.length === 1 ? '' : 's'}`, wikiCanvas.width / 2, 104)
+    ctx.textAlign = 'left'
+    for (const [index, page] of pages.slice(0, 4).entries()) {
+      let title = `• ${page.title}`
+      while (title.length > 3 && ctx.measureText(title).width > wikiCanvas.width - 72) title = title.slice(0, -1)
+      ctx.fillText(title, 40, 152 + index * 38)
+    }
+  }
+  wikiTexture.needsUpdate = true
 }
 
 export function updateBoard(tasks) {
@@ -781,9 +845,10 @@ function animate() {
   renderer.render(scene, camera)
 }
 
-export function initScene({ container, onVillagerClick, onBoardClick }) {
+export function initScene({ container, onVillagerClick, onBoardClick, onWikiClick }) {
   villagerClickHandler = onVillagerClick ?? (() => {})
   boardClickHandler = onBoardClick ?? (() => {})
+  wikiClickHandler = onWikiClick ?? (() => {})
   scene = new THREE.Scene()
   scene.background = new THREE.Color('#aee3f5')
   scene.fog = new THREE.Fog('#aee3f5', 34, 75)
@@ -845,6 +910,7 @@ export function initScene({ container, onVillagerClick, onBoardClick }) {
     addFlower(Math.cos(angle) * distance, Math.sin(angle) * distance)
   }
   addKanbanBoard()
+  addWikiStand()
   addClouds()
 
   // Villagers and the board are clickable (distinguish clicks from orbit
@@ -857,10 +923,12 @@ export function initScene({ container, onVillagerClick, onBoardClick }) {
     raycaster.setFromCamera(pointer, camera)
     const groups = [...villagers.values()].map(villager => villager.group)
     if (boardGroup) groups.push(boardGroup)
+    if (wikiGroup) groups.push(wikiGroup)
     const hits = raycaster.intersectObjects(groups, true)
     const data = hits[0]?.object?.userData ?? {}
     if (data.villagerName) return { villager: data.villagerName }
     if (data.isBoard) return { board: true }
+    if (data.isWiki) return { wiki: true }
     return null
   }
 
@@ -876,6 +944,7 @@ export function initScene({ container, onVillagerClick, onBoardClick }) {
     const hit = interactiveHit(event)
     if (hit?.villager) villagerClickHandler(hit.villager)
     else if (hit?.board) boardClickHandler()
+    else if (hit?.wiki) wikiClickHandler()
   })
   renderer.domElement.addEventListener('pointermove', event => {
     renderer.domElement.style.cursor = interactiveHit(event) ? 'pointer' : ''

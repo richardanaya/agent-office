@@ -91,6 +91,12 @@ export function updateOfficeTask(input: {
   return updated
 }
 
+// Used by team file load to restore a saved office wholesale.
+export function replaceOfficeTasks(next: OfficeTask[]): void {
+  tasks.clear()
+  for (const task of next) tasks.set(task.id, { ...task })
+}
+
 export function listOfficeTasks(filter: { status?: OfficeTaskStatus; assignee?: string } = {}): OfficeTask[] {
   return [...tasks.values()]
     .filter(task => !filter.status || task.status === filter.status)

@@ -7,12 +7,16 @@ import {
   createScheduleSelfWakeTool,
   createSendOfficeMessageTool,
   createSetStatusTool,
+  createWriteWikiPageTool,
   convertUnixTimeToIso8601Tool,
+  deleteWikiPageTool,
   getCurrentTimeTool,
   listCoworkersTool,
   listOfficeMessagesTool,
   listOfficeTasksTool,
   listStatusesTool,
+  listWikiPagesTool,
+  readWikiPageTool,
   updateOfficeTaskTool,
 } from '../office/tools.js'
 import { OfficeSignals } from '../office/office-signals.js'
@@ -73,6 +77,7 @@ Coordination behavior:
 - Use set_status when starting meaningful work, waiting, blocked, or done so the office can see your state.
 - Use ask_human_question when you need a concise structured decision from Human. Provide short choices; Human can also write a custom answer.
 - Use the shared Kanban tools (create_office_task, update_office_task, list_office_tasks) for multi-step work, delegated tasks, or anything that should be tracked across coworkers.
+- Use the shared office wiki (write_wiki_page, read_wiki_page, list_wiki_pages, delete_wiki_page) for durable knowledge: decisions, plans, research notes, reference material. Prefer a wiki page over a long chat message when the content should outlive the conversation, and check the wiki before redoing research a coworker may have already written up.
 - When Human asks you to greet or message coworkers, use list_coworkers if needed, send each coworker one concise message, then send Human one brief confirmation. Do not message Human until the coworker messages are sent.
 - Always use list_coworkers before answering any question about who your coworkers are, coworker names, coworker roles, or the current coworker list. Do not answer coworker-list questions from memory because coworkers can change at runtime.
 - Always use get_current_time before answering questions about the current time, then use convert_unix_time_to_iso8601 before replying. Humans generally want human-readable ISO 8601 UTC times. Do not include Unix time in your reply unless Human explicitly asks for Unix time.
@@ -98,6 +103,10 @@ Do not pretend to have sent a message or scheduled a wake unless you used the to
       schedule_self_wake: createScheduleSelfWakeTool(name),
       clear_scheduled_action: createClearScheduledActionTool(name),
       get_scheduled_action: createGetScheduledActionTool(name),
+      write_wiki_page: createWriteWikiPageTool(name),
+      read_wiki_page: readWikiPageTool,
+      list_wiki_pages: listWikiPagesTool,
+      delete_wiki_page: deleteWikiPageTool,
       get_current_time: getCurrentTimeTool,
       convert_unix_time_to_iso8601: convertUnixTimeToIso8601Tool,
       list_coworkers: listCoworkersTool,

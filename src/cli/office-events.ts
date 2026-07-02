@@ -56,6 +56,10 @@ export function formatOfficeEvent(agentName: string, chunk: Chunk): OfficeEventL
       if (toolName === 'list_office_tasks') return { text: `📋 ${agentName} checked the Kanban board`, color: 'gray' }
       if (toolName === 'list_statuses') return { text: `📍 ${agentName} checked coworker statuses`, color: 'gray' }
       if (toolName === 'list_coworkers') return { text: `👥 ${agentName} checked the coworker directory`, color: 'gray' }
+      if (toolName === 'write_wiki_page') return { text: `📖 ${agentName} wrote wiki page: ${args.title}`, color: 'green' }
+      if (toolName === 'read_wiki_page') return { text: `📖 ${agentName} read wiki page: ${args.title}`, color: 'gray' }
+      if (toolName === 'list_wiki_pages') return { text: `📖 ${agentName} checked the wiki index`, color: 'gray' }
+      if (toolName === 'delete_wiki_page') return { text: `📖 ${agentName} deleted wiki page: ${args.title}`, color: 'yellow' }
       if (toolName === 'get_current_time') return { text: `🕒 ${agentName} checked current Unix time`, color: 'blue' }
       if (toolName === 'convert_unix_time_to_iso8601') return { text: `🕒 ${agentName} converted Unix time ${args.unixTime} (${args.unit ?? 'seconds'}) to ISO 8601`, color: 'blue' }
       return { text: `🛠️  ${agentName} called ${toolName}${args ? ` ${JSON.stringify(args)}` : ''}`, color: 'gray' }
@@ -70,6 +74,10 @@ export function formatOfficeEvent(agentName: string, chunk: Chunk): OfficeEventL
       if (toolName === 'list_statuses') return { text: `📍 Found ${result.statuses?.length ?? 0} coworker status(es)`, color: 'gray' }
       if (toolName === 'list_coworkers') return { text: `👥 Found ${result.coworkers?.length ?? 0} coworker(s)`, color: 'gray' }
       if (toolName === 'list_office_messages') return { text: `✉️  Mailbox has ${result.messages?.length ?? 0} message(s)`, color: 'gray' }
+      if (toolName === 'write_wiki_page') return { text: `📖 Wiki page saved: ${result.title}`, color: 'green' }
+      if (toolName === 'read_wiki_page') return { text: result.page ? `📖 Read "${result.page.title}" (${result.page.content?.length ?? 0} chars)` : '📖 Wiki page not found', color: 'gray' }
+      if (toolName === 'list_wiki_pages') return { text: `📖 Wiki has ${result.pages?.length ?? 0} page(s)`, color: 'gray' }
+      if (toolName === 'delete_wiki_page') return { text: result.deleted ? `📖 Deleted wiki page: ${result.page?.title}` : '📖 Wiki page not found', color: 'yellow' }
       if (toolName === 'schedule_self_wake') return { text: `⏰ ${agentName} scheduled wake in ${result.delaySeconds}s: ${result.instruction}`, color: 'blue' }
       if (toolName === 'clear_scheduled_action' && result?.cleared) return { text: `🧹 ${agentName} cleared scheduled wake`, color: 'blue' }
       if (toolName === 'get_current_time') return { text: `🕒 ${agentName} current Unix time: ${result.unixTime}`, color: 'blue' }

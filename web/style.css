@@ -453,6 +453,69 @@ input:focus { border-color: var(--leaf); }
 .task-card.priority-high { border-color: var(--peach); }
 .task-card.priority-urgent { border-color: var(--red); }
 
+/* ── Office wiki modal ───────────────────────────────────── */
+
+.wiki-card {
+  width: min(680px, calc(100vw - 40px));
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+
+#wiki-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wiki-page-chip {
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--brown);
+  background: var(--cream-deep);
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.wiki-page-chip.selected {
+  background: #e7f6df;
+  border-color: var(--leaf);
+}
+
+.wiki-empty {
+  color: var(--brown-soft);
+  font-size: 13.5px;
+}
+
+.wiki-page-title {
+  font-weight: 800;
+  font-size: 16px;
+  margin-top: 4px;
+}
+
+.wiki-page-meta {
+  color: var(--brown-soft);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+#wiki-page-body {
+  background: #fff;
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 46vh;
+  overflow-y: auto;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* ── Toast ───────────────────────────────────────────────── */
 
 #toast {

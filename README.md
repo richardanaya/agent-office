@@ -47,6 +47,7 @@ Every office server also hosts a web view at its URL (e.g. `http://127.0.0.1:474
 
 - Type in the dialog bar to talk to the whole office; **click a villager** to DM them.
 - **Click the office board** to open the full kanban view with every task.
+- **Click the wiki stand** next to it to browse the office wiki — pages your coworkers write with their `write_wiki_page` / `read_wiki_page` / `list_wiki_pages` / `delete_wiki_page` tools to keep durable shared knowledge.
 - **🍃 Team** hires and fires coworkers and saves/loads team files.
 - **📜 Log** shows the same live feed as the terminal.
 - When a coworker asks you a question, an Animal Crossing-style dialog pops up with the choices.
@@ -108,6 +109,8 @@ A team file is plain JSON you can edit by hand:
 ```
 
 If a `team.json` exists in the directory you launch from, it loads automatically.
+
+A team file saves the *whole office*: alongside the roster it carries the kanban board (`tasks`) and the office wiki (`wiki`), so loading a team restores everything your coworkers were working on and knew.
 
 ## The terminal experience
 

@@ -10,7 +10,8 @@ import { listAgentCoworkers, setCoworkerAppearance } from '../office/coworkers.j
 import { fireCoworker, hireCoworker } from '../office/hiring.js'
 import { deliverHumanMessage, listHumanInbox, markAllHumanMessagesSeen } from '../office/human.js'
 import { answerHumanQuestion, listHumanQuestions } from '../office/human-questions.js'
-import { listCoworkerStatuses, listOfficeTasks } from '../office/kanban.js'
+import { listCoworkerStatuses, listOfficeTasks, replaceOfficeTasks } from '../office/kanban.js'
+import { listWikiPages, replaceWikiPages } from '../office/wiki.js'
 import { loadTeamFile, saveTeamFile, type TeamFile } from '../office/team.js'
 import { coworkerThread } from '../office/threads.js'
 import type { OfficeState, StoredOfficeEvent } from '../protocol.js'
@@ -165,6 +166,9 @@ export async function startOfficeServer(options: OfficeServerOptions = {}): Prom
         failures.push(`${member.name} (${error instanceof Error ? error.message : String(error)})`)
       }
     }
+    // A team file carries the whole office: board and wiki come with it.
+    replaceOfficeTasks(team.tasks ?? [])
+    replaceWikiPages(team.wiki ?? [])
     return failures
   }
 
@@ -174,6 +178,7 @@ export async function startOfficeServer(options: OfficeServerOptions = {}): Prom
       statuses: listCoworkerStatuses(),
       tasks: listOfficeTasks(),
       questions: listHumanQuestions({ unansweredOnly: true }),
+      wiki: listWikiPages(),
       teamFile: teamFilePath,
     }
   }
@@ -288,7 +293,7 @@ export async function startOfficeServer(options: OfficeServerOptions = {}): Prom
     if (method === 'POST' && path === '/api/team/save') {
       const body = await readJson(req)
       const targetPath = requireString(body, 'path')
-      saveTeamFile(targetPath, { coworkers: listAgentCoworkers() })
+      saveTeamFile(targetPath, { coworkers: listAgentCoworkers(), tasks: listOfficeTasks(), wiki: listWikiPages() })
       teamFilePath = targetPath
       return sendJson(res, 200, { path: targetPath, coworkers: listAgentCoworkers() })
     }

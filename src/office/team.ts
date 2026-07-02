@@ -1,6 +1,28 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { z } from 'zod'
 
+const taskFileSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().trim().min(1).max(120),
+  description: z.string().max(1000).optional(),
+  status: z.enum(['backlog', 'todo', 'doing', 'blocked', 'review', 'done', 'canceled']),
+  assignee: z.string().max(64).optional(),
+  priority: z.enum(['low', 'normal', 'high', 'urgent']),
+  createdBy: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+const wikiPageFileSchema = z.object({
+  slug: z.string().min(1).max(160),
+  title: z.string().trim().min(2).max(120),
+  content: z.string().min(1).max(20_000),
+  updatedBy: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+// A team file is a whole saved office: roster, kanban board, and wiki.
 export const teamFileSchema = z.object({
   name: z.string().trim().min(1).max(120).optional().describe('Optional display name for the team.'),
   coworkers: z
@@ -12,6 +34,8 @@ export const teamFileSchema = z.object({
       }),
     )
     .max(24),
+  tasks: z.array(taskFileSchema).max(500).optional().describe('Kanban board tasks.'),
+  wiki: z.array(wikiPageFileSchema).max(200).optional().describe('Office wiki pages.'),
 })
 
 export type TeamFile = z.infer<typeof teamFileSchema>

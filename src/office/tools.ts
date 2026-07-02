@@ -6,6 +6,7 @@ import { listAgentCoworkers, listCoworkerProfiles } from './coworkers.js'
 import { clearScheduledAction, getScheduledAction, scheduleSelfWake } from './scheduled-actions.js'
 import { createOfficeTask, listCoworkerStatuses, listOfficeTasks, setCoworkerStatus, updateOfficeTask } from './kanban.js'
 import { askHumanQuestion } from './human-questions.js'
+import { MAX_WIKI_CONTENT_LENGTH, deleteWikiPage, listWikiPages, readWikiPage, writeWikiPage } from './wiki.js'
 
 // Throttle window that stops an agent from double-messaging Human. This
 // counteracts a real model behavior (re-sending or rephrasing an answer in a
@@ -320,6 +321,76 @@ export const listOfficeTasksTool = createTool({
     tasks: z.array(officeTaskSchema),
   }),
   execute: async filter => ({ tasks: listOfficeTasks(filter) }),
+})
+
+const wikiPageSchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  content: z.string(),
+  updatedBy: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export function createWriteWikiPageTool(agentName: string) {
+  return createTool({
+    id: 'write_wiki_page',
+    description:
+      'Create or fully overwrite a page in the shared office wiki. Pages are identified by title, so writing an existing title replaces that page. Use the wiki for durable shared knowledge: decisions, plans, reference notes, how-tos.',
+    strict: true,
+    inputSchema: z.object({
+      title: z.string().trim().min(2).max(120).describe('Page title. Writing an existing title overwrites that page.'),
+      content: z.string().trim().min(1).max(MAX_WIKI_CONTENT_LENGTH).describe('Full page content (replaces any previous content).'),
+    }),
+    outputSchema: wikiPageSchema,
+    execute: async ({ title, content }) => writeWikiPage({ title, content, updatedBy: agentName }),
+  })
+}
+
+export const readWikiPageTool = createTool({
+  id: 'read_wiki_page',
+  description: 'Read one page from the shared office wiki by title.',
+  strict: true,
+  inputSchema: z.object({
+    title: z.string().trim().min(1).max(120),
+  }),
+  outputSchema: z.object({
+    page: wikiPageSchema.optional().describe('The page, when it exists.'),
+    availableTitles: z.array(z.string()).describe('All current wiki page titles, useful when the page was not found.'),
+  }),
+  execute: async ({ title }) => ({
+    page: readWikiPage(title),
+    availableTitles: listWikiPages().map(page => page.title),
+  }),
+})
+
+export const listWikiPagesTool = createTool({
+  id: 'list_wiki_pages',
+  description: 'List the pages in the shared office wiki (titles and metadata, not content). Use read_wiki_page for content.',
+  inputSchema: z.object({}),
+  outputSchema: z.object({
+    pages: z.array(z.object({ slug: z.string(), title: z.string(), updatedBy: z.string(), updatedAt: z.string() })),
+  }),
+  execute: async () => ({
+    pages: listWikiPages().map(({ slug, title, updatedBy, updatedAt }) => ({ slug, title, updatedBy, updatedAt })),
+  }),
+})
+
+export const deleteWikiPageTool = createTool({
+  id: 'delete_wiki_page',
+  description: 'Delete a page from the shared office wiki by title. Only delete pages that are clearly obsolete or that Human asked to remove.',
+  strict: true,
+  inputSchema: z.object({
+    title: z.string().trim().min(1).max(120),
+  }),
+  outputSchema: z.object({
+    deleted: z.boolean(),
+    page: wikiPageSchema.optional().describe('The deleted page, if it existed.'),
+  }),
+  execute: async ({ title }) => {
+    const page = deleteWikiPage(title)
+    return { deleted: Boolean(page), page }
+  },
 })
 
 export const listOfficeMessagesTool = createTool({

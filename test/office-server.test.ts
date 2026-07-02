@@ -5,7 +5,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { OfficeClient } from '../src/client/office-client.js'
 import { startOfficeServer, type OfficeServer } from '../src/server/office-server.js'
 import { askHumanQuestion } from '../src/office/human-questions.js'
+import { createOfficeTask, listOfficeTasks } from '../src/office/kanban.js'
 import { officeMailbox } from '../src/office/mailbox.js'
+import { listWikiPages, writeWikiPage } from '../src/office/wiki.js'
 import type { StoredOfficeEvent } from '../src/protocol.js'
 
 let server: OfficeServer
@@ -68,6 +70,34 @@ describe('office server API', () => {
     expect(state.coworkers.map(coworker => coworker.name)).toEqual(['Lodi'])
     expect(state.teamFile).toBe(otherTeam)
     await client.fire('Lodi')
+  })
+
+  it('saves and restores the board and wiki with the team', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-office-office-'))
+    await client.hire('Memo', 'office historian')
+    try {
+      createOfficeTask({ title: 'Water the plants', createdBy: 'Memo' })
+      writeWikiPage({ title: 'Plant Care', content: 'Water twice a week.', updatedBy: 'Memo' })
+
+      const path = join(dir, 'office.json')
+      await client.saveTeam(path)
+      const state = await client.getState()
+      expect(state.wiki.map(page => page.title)).toContain('Plant Care')
+
+      // Loading an office-less team clears board and wiki...
+      writeFileSync(join(dir, 'bare.json'), JSON.stringify({ coworkers: [{ name: 'Memo', role: 'office historian' }] }))
+      await client.loadTeam(join(dir, 'bare.json'))
+      expect(listOfficeTasks()).toEqual([])
+      expect(listWikiPages()).toEqual([])
+
+      // ...and loading the saved office brings both back.
+      await client.loadTeam(path)
+      expect(listOfficeTasks().map(task => task.title)).toContain('Water the plants')
+      expect(listWikiPages().map(page => page.title)).toContain('Plant Care')
+    } finally {
+      await client.loadTeam(join(dir, 'bare.json')).catch(() => {})
+      await client.fire('Memo').catch(() => {})
+    }
   })
 
   it('rerolls a coworker appearance and persists it in team files', async () => {

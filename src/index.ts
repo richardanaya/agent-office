@@ -39,11 +39,15 @@ export {
   createScheduleSelfWakeTool,
   createSendOfficeMessageTool,
   createSetStatusTool,
+  createWriteWikiPageTool,
+  deleteWikiPageTool,
   getCurrentTimeTool,
   listCoworkersTool,
   listOfficeMessagesTool,
   listOfficeTasksTool,
   listStatusesTool,
+  listWikiPagesTool,
+  readWikiPageTool,
   updateOfficeTaskTool,
 } from './office/tools.js'
 export {
@@ -75,6 +79,7 @@ export {
   getCoworkerStatus,
   listCoworkerStatuses,
   listOfficeTasks,
+  replaceOfficeTasks,
   setCoworkerStatus,
   updateOfficeTask,
   type CoworkerStatus,
@@ -89,3 +94,12 @@ export {
   type HumanQuestion,
   type HumanQuestionChoiceMode,
 } from './office/human-questions.js'
+export {
+  deleteWikiPage,
+  listWikiPages,
+  readWikiPage,
+  replaceWikiPages,
+  wikiSlug,
+  writeWikiPage,
+  type WikiPage,
+} from './office/wiki.js'

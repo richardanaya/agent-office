@@ -2,6 +2,7 @@ import type { CoworkerProfile } from './office/coworkers.js'
 import type { CoworkerStatus, OfficeTask } from './office/kanban.js'
 import type { HumanQuestion } from './office/human-questions.js'
 import type { OfficeMessage } from './office/mailbox.js'
+import type { WikiPage } from './office/wiki.js'
 
 // Wire types shared by the office server and its clients (CLI, web).
 
@@ -18,6 +19,7 @@ export type OfficeState = {
   statuses: CoworkerStatus[]
   tasks: OfficeTask[]
   questions: HumanQuestion[]
+  wiki: WikiPage[]
   teamFile: string | null
 }
 

@@ -1,5 +1,5 @@
 import * as api from './api.js'
-import { agentBubble, initScene, setThinking, syncVillagers, updateBoard, villagerColor } from './scene.js'
+import { agentBubble, initScene, setThinking, syncVillagers, updateBoard, updateWiki, villagerColor } from './scene.js'
 
 const STATE_POLL_MS = 2_000
 const LOG_LIMIT = 200
@@ -10,6 +10,8 @@ let chatTarget = 'All'
 let coworkers = []
 let questions = []
 let tasks = []
+let wiki = []
+let selectedWikiSlug = null
 let activeQuestion = null
 let selectedChoices = []
 const thinkingCounts = new Map()
@@ -299,9 +301,51 @@ $('board-close').addEventListener('click', () => {
   $('board-modal').hidden = true
 })
 
+// ── Office wiki dialog ───────────────────────────────────────
+
+function renderWikiModal() {
+  const chips = $('wiki-pages')
+  chips.replaceChildren()
+  if (wiki.length === 0) {
+    const empty = document.createElement('div')
+    empty.className = 'wiki-empty'
+    empty.textContent = 'No pages yet. Coworkers write pages here with their wiki tools — ask one to document something!'
+    chips.appendChild(empty)
+    $('wiki-content').hidden = true
+    return
+  }
+  if (!wiki.some(page => page.slug === selectedWikiSlug)) selectedWikiSlug = wiki[0].slug
+  for (const page of wiki) {
+    const chip = document.createElement('button')
+    chip.type = 'button'
+    chip.className = `wiki-page-chip${page.slug === selectedWikiSlug ? ' selected' : ''}`
+    chip.textContent = page.title
+    chip.addEventListener('click', () => {
+      selectedWikiSlug = page.slug
+      renderWikiModal()
+    })
+    chips.appendChild(chip)
+  }
+  const selected = wiki.find(page => page.slug === selectedWikiSlug)
+  $('wiki-content').hidden = false
+  $('wiki-page-title').textContent = selected.title
+  $('wiki-page-meta').textContent = `last edited by ${selected.updatedBy} · ${new Date(selected.updatedAt).toLocaleString()}`
+  $('wiki-page-body').textContent = selected.content
+}
+
+function openWiki() {
+  renderWikiModal()
+  $('wiki-modal').hidden = false
+}
+
+$('wiki-close').addEventListener('click', () => {
+  $('wiki-modal').hidden = true
+})
+
 document.addEventListener('keydown', event => {
   if (event.key !== 'Escape') return
-  if (!$('board-modal').hidden) $('board-modal').hidden = true
+  if (!$('wiki-modal').hidden) $('wiki-modal').hidden = true
+  else if (!$('board-modal').hidden) $('board-modal').hidden = true
   else if (!$('question-modal').hidden) {
     $('question-modal').hidden = true
     activeQuestion = null
@@ -328,11 +372,14 @@ async function refreshState() {
     coworkers = state.coworkers
     questions = state.questions
     tasks = state.tasks
+    wiki = state.wiki
     syncVillagers(state.coworkers, state.statuses)
     updateBoard(state.tasks)
+    updateWiki(state.wiki)
     renderTeam()
     renderQuestionsBadge()
     if (!$('board-modal').hidden) renderBoardModal()
+    if (!$('wiki-modal').hidden) renderWikiModal()
     if (coworkers.length === 0) $('team-panel').hidden = false
   } catch {
     // Connection issues are surfaced by the event stream status.
@@ -367,6 +414,12 @@ function handleAgentChunk(agent, chunk) {
         setTimeout(refreshState, 300)
       } else if (toolName === 'create_office_task' || toolName === 'update_office_task') {
         log(`${agent} updated the office board 📌`, 'muted')
+        setTimeout(refreshState, 300)
+      } else if (toolName === 'write_wiki_page') {
+        log(`${agent} wrote wiki page: ${args.title} 📖`, 'muted')
+        setTimeout(refreshState, 300)
+      } else if (toolName === 'delete_wiki_page') {
+        log(`${agent} deleted wiki page: ${args.title} 📖`, 'muted')
         setTimeout(refreshState, 300)
       }
       return
@@ -415,6 +468,7 @@ try {
       $('chat-input').focus()
     },
     onBoardClick: openBoard,
+    onWikiClick: openWiki,
   })
 } catch (error) {
   console.error('Could not start the 3D office scene:', error)
