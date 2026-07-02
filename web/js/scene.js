@@ -16,6 +16,11 @@ const BUBBLE_TAIL = 46
 const BUBBLE_PADDING = 88
 // 160 canvas pixels per world unit keeps bubble text a consistent size.
 const BUBBLE_PIXELS_PER_UNIT = 160
+// The bubble canvas and sprite never resize (resizing a live CanvasTexture
+// stretches stale frames); messages draw at their measured size inside this
+// fixed canvas, anchored bottom-center, with transparent margins around them.
+const BUBBLE_CANVAS_WIDTH = 640
+const BUBBLE_CANVAS_HEIGHT = 352
 
 // Bubbles stay up long enough to read: a base plus reading time by length.
 function bubbleSecondsFor(text) {
@@ -120,47 +125,79 @@ function wrapBubbleLines(ctx, text, maxWidth, maxLines) {
   })
 }
 
-// Measure the text first, then size the canvas, bubble, and sprite to fit it:
-// short quips get small bubbles, long messages get room to breathe.
+// Measure the text, then draw a bubble sized to it inside the fixed canvas:
+// short quips get small bubbles, long messages get room to breathe, and the
+// sprite itself never changes size.
 function drawBubble(bubble, text) {
-  const { canvas, texture, sprite } = bubble
-  const ctx = canvas.getContext('2d')
+  const { canvas, ctx, texture } = bubble
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
   ctx.font = BUBBLE_FONT
-  const lines = wrapBubbleLines(ctx, text, BUBBLE_MAX_TEXT_WIDTH, BUBBLE_MAX_LINES)
+  let lines = wrapBubbleLines(ctx, text, BUBBLE_MAX_TEXT_WIDTH, BUBBLE_MAX_LINES)
+  if (lines.length === 0) lines = ['…']
   const widest = Math.max(120, ...lines.map(line => ctx.measureText(line).width))
-  const width = Math.ceil(Math.min(widest, BUBBLE_MAX_TEXT_WIDTH) + BUBBLE_PADDING)
-  const height = lines.length * BUBBLE_LINE_HEIGHT + 56 + BUBBLE_TAIL
-  canvas.width = width
-  canvas.height = height
+  const bubbleWidth = Math.ceil(Math.min(widest, BUBBLE_MAX_TEXT_WIDTH) + BUBBLE_PADDING)
+  const bodyHeight = lines.length * BUBBLE_LINE_HEIGHT + 56
+  const centerX = canvas.width / 2
+  const left = centerX - bubbleWidth / 2
+  const bodyBottom = canvas.height - BUBBLE_TAIL
+  const top = bodyBottom - bodyHeight
 
-  // Resizing the canvas resets all context state.
   ctx.fillStyle = 'rgba(255, 255, 255, 0.96)'
   ctx.strokeStyle = '#e3d3a8'
   ctx.lineWidth = 8
-  roundedRect(ctx, 10, 10, width - 20, height - 20 - BUBBLE_TAIL, 30)
+  roundedRect(ctx, left, top, bubbleWidth, bodyHeight, 30)
   ctx.fill()
   ctx.stroke()
   // Tail.
   ctx.beginPath()
-  ctx.moveTo(width / 2 - 24, height - BUBBLE_TAIL - 12)
-  ctx.lineTo(width / 2, height - 8)
-  ctx.lineTo(width / 2 + 24, height - BUBBLE_TAIL - 12)
+  ctx.moveTo(centerX - 24, bodyBottom - 8)
+  ctx.lineTo(centerX, canvas.height - 6)
+  ctx.lineTo(centerX + 24, bodyBottom - 8)
   ctx.closePath()
   ctx.fill()
   ctx.stroke()
 
   ctx.fillStyle = '#6b4f2f'
-  ctx.font = BUBBLE_FONT
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  const centerY = 10 + (height - 20 - BUBBLE_TAIL) / 2
+  const centerY = top + bodyHeight / 2
   lines.forEach((line, index) => {
-    ctx.fillText(line, width / 2, centerY + (index - (lines.length - 1) / 2) * BUBBLE_LINE_HEIGHT)
+    ctx.fillText(line, centerX, centerY + (index - (lines.length - 1) / 2) * BUBBLE_LINE_HEIGHT)
   })
   texture.needsUpdate = true
+}
 
-  const worldWidth = width / BUBBLE_PIXELS_PER_UNIT
-  sprite.scale.set(worldWidth, worldWidth * (height / width), 1)
+// One shared thought-cloud texture for every villager's thinking indicator:
+// fixed size and drawn once, so it never depends on text measurement.
+let thinkingMaterial = null
+function getThinkingMaterial() {
+  if (thinkingMaterial) return thinkingMaterial
+  const canvas = document.createElement('canvas')
+  canvas.width = 192
+  canvas.height = 160
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.96)'
+  ctx.strokeStyle = '#e3d3a8'
+  ctx.lineWidth = 6
+  roundedRect(ctx, 6, 6, 180, 96, 40)
+  ctx.fill()
+  ctx.stroke()
+  for (const [x, y, radius] of [[58, 122, 11], [40, 146, 6]]) {
+    ctx.beginPath()
+    ctx.arc(x, y, radius, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+  }
+  ctx.fillStyle = '#9b7f5d'
+  for (const x of [64, 96, 128]) {
+    ctx.beginPath()
+    ctx.arc(x, 54, 8, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  thinkingMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false })
+  return thinkingMaterial
 }
 
 function makeGrassTexture() {
@@ -338,12 +375,19 @@ function createVillager(name, role) {
   drawNameTag(tag, name, color, '')
   group.add(tag.sprite)
 
-  const bubble = makeCanvasSprite(512, 176, 3.1)
+  const bubble = makeCanvasSprite(BUBBLE_CANVAS_WIDTH, BUBBLE_CANVAS_HEIGHT, BUBBLE_CANVAS_WIDTH / BUBBLE_PIXELS_PER_UNIT)
   // Anchor at the tail tip so taller bubbles grow upward, not over the tag.
   bubble.sprite.center.set(0.5, 0)
   bubble.sprite.position.y = 3.0
   bubble.sprite.visible = false
   group.add(bubble.sprite)
+
+  const think = new THREE.Sprite(getThinkingMaterial())
+  think.scale.set(1.0, 0.83, 1)
+  think.center.set(0.5, 0)
+  think.position.set(0.75, 2.8, 0)
+  think.visible = false
+  group.add(think)
 
   const angle = Math.random() * Math.PI * 2
   const distance = 2.5 + Math.random() * (WANDER_RADIUS - 2.5)
@@ -361,6 +405,7 @@ function createVillager(name, role) {
     group,
     tag,
     bubble,
+    think,
     bubbleHideAt: 0,
     thinking: false,
     status: '',
@@ -402,18 +447,13 @@ export function agentBubble(name, text) {
   villager.bubbleHideAt = performance.now() / 1000 + bubbleSecondsFor(text)
 }
 
+// Thinking is its own small thought-cloud sprite, so it can never overwrite
+// or resize a speech bubble that is still being read.
 export function setThinking(name, thinking) {
   const villager = villagers.get(name)
   if (!villager) return
   villager.thinking = thinking
-  if (thinking) {
-    drawBubble(villager.bubble, '💭 …')
-    villager.bubble.sprite.visible = true
-    villager.bubbleHideAt = Number.POSITIVE_INFINITY
-  } else if (villager.bubbleHideAt === Number.POSITIVE_INFINITY) {
-    villager.bubble.sprite.visible = false
-    villager.bubbleHideAt = 0
-  }
+  villager.think.visible = thinking
 }
 
 function animate() {
