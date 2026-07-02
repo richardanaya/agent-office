@@ -1,11 +1,13 @@
-// The Animal Crossing-flavored office: a grassy island with toon villagers
-// (one per coworker) that wander, bob, think, and talk in speech bubbles.
+// The office: an art deco penthouse floor under a night sky — polished
+// marble, gold trim, potted palms, and a skyline of lit deco towers — with
+// Animal Crossing-style toon villagers (one per coworker) that wander, bob,
+// think, and talk in speech bubbles.
 
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
 const PALETTE = ['#ff9f9f', '#ffc38a', '#f7e07e', '#9fe08f', '#8fd8e8', '#9fb8ff', '#c9aaff', '#ffaad5']
-const GRASS_RADIUS = 26
+const FLOOR_RADIUS = 26
 const WANDER_RADIUS = 8
 
 const BUBBLE_FONT = '700 34px "Josefin Sans", sans-serif'
@@ -39,7 +41,6 @@ let wikiTexture
 let wikiCanvas
 let wikiGroup
 const villagers = new Map()
-const clouds = []
 let villagerClickHandler = () => {}
 let boardClickHandler = () => {}
 let wikiClickHandler = () => {}
@@ -286,34 +287,44 @@ function getThinkingMaterial() {
   return thinkingMaterial
 }
 
-function makeGrassTexture() {
+// Polished marble checker with thin gold gridlines and corner studs.
+function makeFloorTexture() {
   const canvas = document.createElement('canvas')
   canvas.width = 256
   canvas.height = 256
   const ctx = canvas.getContext('2d')
-  ctx.fillStyle = '#8fd170'
-  ctx.fillRect(0, 0, 256, 256)
-  ctx.fillStyle = '#83c765'
-  for (let y = 0; y < 8; y++) {
-    for (let x = 0; x < 8; x++) {
-      if ((x + y) % 2 === 0) ctx.fillRect(x * 32, y * 32, 32, 32)
+  const tile = 128
+  for (let y = 0; y < 2; y++) {
+    for (let x = 0; x < 2; x++) {
+      ctx.fillStyle = (x + y) % 2 === 0 ? '#25252f' : '#2d2d39'
+      ctx.fillRect(x * tile, y * tile, tile, tile)
     }
   }
-  ctx.strokeStyle = 'rgba(110, 170, 85, 0.55)'
-  ctx.lineWidth = 2
-  for (let index = 0; index < 240; index++) {
-    const x = Math.random() * 256
-    const y = Math.random() * 256
+  ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)'
+  ctx.lineWidth = 3
+  for (const offset of [0, tile, 256]) {
     ctx.beginPath()
-    ctx.moveTo(x, y)
-    ctx.lineTo(x + 2, y - 5)
+    ctx.moveTo(offset, 0)
+    ctx.lineTo(offset, 256)
+    ctx.moveTo(0, offset)
+    ctx.lineTo(256, offset)
     ctx.stroke()
+  }
+  ctx.fillStyle = 'rgba(212, 175, 55, 0.55)'
+  for (const x of [0, tile, 256]) {
+    for (const y of [0, tile, 256]) {
+      ctx.save()
+      ctx.translate(x, y)
+      ctx.rotate(Math.PI / 4)
+      ctx.fillRect(-6, -6, 12, 12)
+      ctx.restore()
+    }
   }
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
-  texture.repeat.set(10, 10)
+  texture.repeat.set(6, 6)
   return texture
 }
 
@@ -321,38 +332,53 @@ function toon(color) {
   return new THREE.MeshToonMaterial({ color })
 }
 
-function addTree(x, z, scale = 1) {
-  const tree = new THREE.Group()
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28 * scale, 0.36 * scale, 1.6 * scale, 8), toon('#9a6b43'))
-  trunk.position.y = 0.8 * scale
+// Potted palm in a gold-banded lacquer planter — the deco office plant.
+function addPalm(x, z, scale = 1) {
+  const palm = new THREE.Group()
+  const planter = new THREE.Mesh(new THREE.CylinderGeometry(0.5 * scale, 0.62 * scale, 0.62 * scale, 10), toon('#1f1f2a'))
+  planter.position.y = 0.31 * scale
+  planter.castShadow = true
+  palm.add(planter)
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.53 * scale, 0.53 * scale, 0.1 * scale, 10), toon('#d4af37'))
+  band.position.y = 0.55 * scale
+  palm.add(band)
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1 * scale, 0.16 * scale, 1.7 * scale, 8), toon('#6e5136'))
+  trunk.position.y = 1.4 * scale
   trunk.castShadow = true
-  tree.add(trunk)
-  const leafMaterial = toon('#5eb648')
-  const positions = [
-    [0, 2.2 * scale, 0, 1.15 * scale],
-    [0.7 * scale, 1.8 * scale, 0.15 * scale, 0.8 * scale],
-    [-0.65 * scale, 1.85 * scale, -0.1 * scale, 0.75 * scale],
-  ]
-  for (const [px, py, pz, radius] of positions) {
-    const blob = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 12), leafMaterial)
-    blob.position.set(px, py, pz)
-    blob.castShadow = true
-    tree.add(blob)
+  palm.add(trunk)
+  const frondMaterial = toon('#2f6b4f')
+  const fronds = 6
+  for (let index = 0; index < fronds; index++) {
+    const angle = (index / fronds) * Math.PI * 2
+    const frond = new THREE.Mesh(new THREE.SphereGeometry(0.55 * scale, 10, 8), frondMaterial)
+    frond.scale.set(1.6, 0.22, 0.4)
+    frond.position.set(Math.cos(angle) * 0.62 * scale, 2.32 * scale, Math.sin(angle) * 0.62 * scale)
+    frond.rotation.y = -angle
+    frond.rotation.z = 0.42
+    frond.castShadow = true
+    palm.add(frond)
   }
-  tree.position.set(x, 0, z)
-  scene.add(tree)
+  const crown = new THREE.Mesh(new THREE.SphereGeometry(0.2 * scale, 10, 8), frondMaterial)
+  crown.position.y = 2.42 * scale
+  palm.add(crown)
+  palm.position.set(x, 0, z)
+  scene.add(palm)
 }
 
-function addFlower(x, z) {
-  const flower = new THREE.Group()
-  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.35, 6), toon('#4f9d3f'))
-  stem.position.y = 0.18
-  flower.add(stem)
-  const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), toon(PALETTE[Math.floor(Math.random() * PALETTE.length)]))
-  bloom.position.y = 0.4
-  flower.add(bloom)
-  flower.position.set(x, 0, z)
-  scene.add(flower)
+// Low gold-trimmed planter with an emerald hedge ball.
+function addPlanter(x, z) {
+  const planter = new THREE.Group()
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.26, 8), toon('#1f1f2a'))
+  pot.position.y = 0.13
+  planter.add(pot)
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.05, 8), toon('#d4af37'))
+  rim.position.y = 0.24
+  planter.add(rim)
+  const bush = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), toon('#2f6b4f'))
+  bush.position.y = 0.42
+  planter.add(bush)
+  planter.position.set(x, 0, z)
+  scene.add(planter)
 }
 
 // Gold trim, stepped skyscraper crown, and a finial — the deco treatment
@@ -553,20 +579,69 @@ function addLampPost(x, z) {
   scene.add(lamp)
 }
 
-function addClouds() {
-  const material = new THREE.MeshToonMaterial({ color: '#ffffff' })
-  for (let index = 0; index < 5; index++) {
-    const cloud = new THREE.Group()
-    for (const [px, py, radius] of [[-1.2, 0, 0.9], [0, 0.35, 1.2], [1.3, 0, 0.85]]) {
-      const puff = new THREE.Mesh(new THREE.SphereGeometry(radius, 12, 10), material)
-      puff.position.set(px, py, 0)
-      cloud.add(puff)
+// A ring of dark deco towers with lit windows on the horizon.
+function makeWindowTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 64
+  canvas.height = 128
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#161624'
+  ctx.fillRect(0, 0, 64, 128)
+  for (let y = 8; y < 120; y += 14) {
+    for (let x = 8; x < 56; x += 12) {
+      ctx.fillStyle = Math.random() < 0.55 ? '#f2cd7c' : '#232336'
+      ctx.fillRect(x, y, 6, 8)
     }
-    cloud.position.set(-30 + index * 14, 11 + (index % 3) * 1.6, -14 + (index % 2) * 20)
-    cloud.userData.speed = 0.4 + (index % 3) * 0.18
-    clouds.push(cloud)
-    scene.add(cloud)
   }
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
+}
+
+function addSkyline() {
+  const count = 22
+  for (let index = 0; index < count; index++) {
+    const angle = (index / count) * Math.PI * 2 + 0.13
+    const distance = 46 + (index % 4) * 5
+    const width = 3.5 + (index % 3) * 1.6
+    const height = 8 + ((index * 7) % 13)
+    const tower = new THREE.Group()
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(width, height, width * 0.8),
+      new THREE.MeshBasicMaterial({ map: makeWindowTexture() }),
+    )
+    body.position.y = height / 2
+    tower.add(body)
+    if (index % 2 === 0) {
+      const crown = new THREE.Mesh(new THREE.BoxGeometry(width * 0.55, 1.6, width * 0.45), new THREE.MeshBasicMaterial({ color: '#1a1a2c' }))
+      crown.position.y = height + 0.8
+      tower.add(crown)
+      const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.2, 6), new THREE.MeshBasicMaterial({ color: '#d4af37' }))
+      spire.position.y = height + 2.6
+      tower.add(spire)
+    }
+    tower.position.set(Math.cos(angle) * distance, 0, Math.sin(angle) * distance)
+    tower.lookAt(0, 0, 0)
+    scene.add(tower)
+  }
+}
+
+function addStars() {
+  const positions = []
+  for (let index = 0; index < 350; index++) {
+    const theta = Math.random() * Math.PI * 2
+    const phi = Math.random() * Math.PI * 0.42
+    const radius = 110
+    positions.push(
+      radius * Math.sin(phi) * Math.cos(theta),
+      radius * Math.cos(phi) + 4,
+      radius * Math.sin(phi) * Math.sin(theta),
+    )
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  const stars = new THREE.Points(geometry, new THREE.PointsMaterial({ color: '#f2e6c4', size: 0.7, sizeAttenuation: true, fog: false }))
+  scene.add(stars)
 }
 
 function addMuzzle(head, appearance) {
@@ -930,11 +1005,6 @@ function animate() {
     }
   }
 
-  for (const cloud of clouds) {
-    cloud.position.x += cloud.userData.speed * delta
-    if (cloud.position.x > 38) cloud.position.x = -38
-  }
-
   controls.update()
   renderer.render(scene, camera)
 }
@@ -944,8 +1014,8 @@ export function initScene({ container, onVillagerClick, onBoardClick, onWikiClic
   boardClickHandler = onBoardClick ?? (() => {})
   wikiClickHandler = onWikiClick ?? (() => {})
   scene = new THREE.Scene()
-  scene.background = new THREE.Color('#aee3f5')
-  scene.fog = new THREE.Fog('#aee3f5', 34, 75)
+  scene.background = new THREE.Color('#10131f')
+  scene.fog = new THREE.Fog('#10131f', 38, 95)
   lastFrameAt = performance.now() / 1000
 
   camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200)
@@ -965,8 +1035,9 @@ export function initScene({ container, onVillagerClick, onBoardClick, onWikiClic
   controls.maxDistance = 40
   controls.maxPolarAngle = Math.PI * 0.46
 
-  scene.add(new THREE.HemisphereLight('#ffffff', '#9cd07f', 0.9))
-  const sun = new THREE.DirectionalLight('#fff4d6', 1.6)
+  // Warm gold key light against a cool night ambience.
+  scene.add(new THREE.HemisphereLight('#8d96c4', '#22222c', 0.85))
+  const sun = new THREE.DirectionalLight('#ffd9a0', 1.5)
   sun.position.set(14, 22, 10)
   sun.castShadow = true
   sun.shadow.mapSize.set(2048, 2048)
@@ -976,33 +1047,40 @@ export function initScene({ container, onVillagerClick, onBoardClick, onWikiClic
   sun.shadow.camera.bottom = -28
   scene.add(sun)
 
-  // Sea, island, props.
-  const sea = new THREE.Mesh(new THREE.CircleGeometry(160, 48), new THREE.MeshToonMaterial({ color: '#6cc3e8' }))
-  sea.rotation.x = -Math.PI / 2
-  sea.position.y = -0.12
-  scene.add(sea)
+  // The street level far below, and the office floor as a raised dais.
+  const street = new THREE.Mesh(new THREE.CircleGeometry(160, 48), new THREE.MeshBasicMaterial({ color: '#0b0d16' }))
+  street.rotation.x = -Math.PI / 2
+  street.position.y = -1.4
+  scene.add(street)
 
-  const grass = new THREE.Mesh(new THREE.CircleGeometry(GRASS_RADIUS, 64), new THREE.MeshToonMaterial({ map: makeGrassTexture() }))
-  grass.rotation.x = -Math.PI / 2
-  grass.receiveShadow = true
-  scene.add(grass)
-
-  const sand = new THREE.Mesh(
-    new THREE.RingGeometry(GRASS_RADIUS - 0.4, GRASS_RADIUS + 2.4, 64),
-    new THREE.MeshToonMaterial({ color: '#f2e3b3' }),
+  const daisWall = new THREE.Mesh(
+    new THREE.CylinderGeometry(FLOOR_RADIUS + 0.2, FLOOR_RADIUS + 1.4, 1.4, 64, 1, true),
+    new THREE.MeshToonMaterial({ color: '#181820', side: THREE.DoubleSide }),
   )
-  sand.rotation.x = -Math.PI / 2
-  sand.position.y = -0.02
-  scene.add(sand)
+  daisWall.position.y = -0.7
+  scene.add(daisWall)
 
-  for (const [x, z, scale] of [[-14, -10, 1.3], [13, -12, 1.1], [17, 6, 1.25], [-17, 7, 1], [-9, 15, 1.15], [8, 16, 1], [15, -2, 0.9], [-16, -2, 0.95]]) {
-    addTree(x, z, scale)
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(FLOOR_RADIUS, 64), new THREE.MeshToonMaterial({ map: makeFloorTexture() }))
+  floor.rotation.x = -Math.PI / 2
+  floor.receiveShadow = true
+  scene.add(floor)
+
+  // Gold rim where the sand ring used to be.
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(FLOOR_RADIUS + 0.05, 0.14, 8, 96), toon('#d4af37'))
+  rim.rotation.x = Math.PI / 2
+  rim.position.y = 0.02
+  scene.add(rim)
+
+  for (const [x, z, scale] of [[-14, -10, 1.2], [13, -12, 1], [17, 6, 1.15], [-17, 7, 0.95], [-9, 15, 1.05], [8, 16, 0.95], [15, -2, 0.85], [-16, -2, 0.9]]) {
+    addPalm(x, z, scale)
   }
-  for (let index = 0; index < 14; index++) {
-    const angle = Math.random() * Math.PI * 2
-    const distance = 9 + Math.random() * 9
-    addFlower(Math.cos(angle) * distance, Math.sin(angle) * distance)
+  for (let index = 0; index < 12; index++) {
+    const angle = (index / 12) * Math.PI * 2 + 0.26
+    const distance = 11 + (index % 3) * 3
+    addPlanter(Math.cos(angle) * distance, Math.sin(angle) * distance)
   }
+  addSkyline()
+  addStars()
   const plaza = new THREE.Mesh(new THREE.CircleGeometry(4.6, 48), new THREE.MeshToonMaterial({ map: makePlazaTexture() }))
   plaza.rotation.x = -Math.PI / 2
   plaza.position.y = 0.01
@@ -1013,7 +1091,6 @@ export function initScene({ container, onVillagerClick, onBoardClick, onWikiClic
 
   addKanbanBoard()
   addWikiStand()
-  addClouds()
 
   // Villagers and the board are clickable (distinguish clicks from orbit
   // drags); hovering them shows a pointer cursor.
