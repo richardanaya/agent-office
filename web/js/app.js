@@ -105,7 +105,7 @@ function renderTeam() {
     const item = document.createElement('li')
     const swatch = document.createElement('span')
     swatch.className = 'swatch'
-    swatch.style.background = villagerColor(coworker.name)
+    swatch.style.background = villagerColor(coworker.name, coworker.appearance)
     const who = document.createElement('div')
     who.className = 'who'
     const name = document.createElement('div')
@@ -115,8 +115,20 @@ function renderTeam() {
     role.className = 'role'
     role.textContent = coworker.role
     who.append(name, role)
+    const rerollButton = document.createElement('button')
+    rerollButton.className = 'row-action'
+    rerollButton.title = `Reroll ${coworker.name}'s look`
+    rerollButton.textContent = '🎲'
+    rerollButton.addEventListener('click', () => {
+      api.rerollAppearance(coworker.name)
+        .then(() => {
+          toast(`${coworker.name} got a new look! 🎲`)
+          refreshState()
+        })
+        .catch(error => toast(error.message))
+    })
     const fireButton = document.createElement('button')
-    fireButton.className = 'fire'
+    fireButton.className = 'row-action'
     fireButton.title = `Fire ${coworker.name}`
     fireButton.textContent = '❌'
     fireButton.addEventListener('click', () => {
@@ -127,7 +139,7 @@ function renderTeam() {
         })
         .catch(error => toast(error.message))
     })
-    item.append(swatch, who, fireButton)
+    item.append(swatch, who, rerollButton, fireButton)
     list.appendChild(item)
   }
 }

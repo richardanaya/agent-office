@@ -70,6 +70,22 @@ describe('office server API', () => {
     await client.fire('Lodi')
   })
 
+  it('rerolls a coworker appearance and persists it in team files', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-office-appearance-'))
+    await client.hire('Dicey', 'appearance tester')
+    try {
+      const { profile } = await client.rerollAppearance('Dicey')
+      expect(Number.isInteger(profile.appearance)).toBe(true)
+      const state = await client.getState()
+      expect(state.coworkers.find(coworker => coworker.name === 'Dicey')?.appearance).toBe(profile.appearance)
+
+      const saved = await client.saveTeam(join(dir, 'dicey.json'))
+      expect(saved.coworkers[0]?.appearance).toBe(profile.appearance)
+    } finally {
+      await client.fire('Dicey')
+    }
+  })
+
   it('rejects loading a team file that does not exist', async () => {
     await expect(client.loadTeam('/definitely/missing.json')).rejects.toThrow(/Could not read team file/)
   })

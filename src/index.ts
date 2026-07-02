@@ -61,6 +61,7 @@ export {
   listAgentCoworkers,
   listCoworkerProfiles,
   removeAgentCoworker,
+  setCoworkerAppearance,
   type CoworkerProfile,
 } from './office/coworkers.js'
 export {

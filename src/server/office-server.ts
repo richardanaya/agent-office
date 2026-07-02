@@ -6,7 +6,7 @@ import { dirname, extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Agent } from '@mastra/core/agent'
 import { getCoworkerAgent } from '../agents/coworkers.js'
-import { listAgentCoworkers } from '../office/coworkers.js'
+import { listAgentCoworkers, setCoworkerAppearance } from '../office/coworkers.js'
 import { fireCoworker, hireCoworker } from '../office/hiring.js'
 import { deliverHumanMessage, listHumanInbox, markAllHumanMessagesSeen } from '../office/human.js'
 import { answerHumanQuestion, listHumanQuestions } from '../office/human-questions.js'
@@ -258,6 +258,14 @@ export async function startOfficeServer(options: OfficeServerOptions = {}): Prom
       const hired = hireAndWatch({ name: requireString(body, 'name'), role: requireString(body, 'role') }, true)
       publishRoster()
       return sendJson(res, 201, { profile: hired.profile })
+    }
+
+    // Reroll a coworker's visual appearance seed; persists via team save.
+    const appearanceMatch = /^\/api\/coworkers\/([^/]+)\/appearance$/.exec(path)
+    if (method === 'POST' && appearanceMatch) {
+      const profile = setCoworkerAppearance(decodeURIComponent(appearanceMatch[1]!), Math.floor(Math.random() * 1_000_000))
+      publishRoster()
+      return sendJson(res, 200, { profile })
     }
 
     const coworkerMatch = /^\/api\/coworkers\/([^/]+)$/.exec(path)

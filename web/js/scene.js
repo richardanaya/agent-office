@@ -40,10 +40,37 @@ const clouds = []
 let villagerClickHandler = () => {}
 let boardClickHandler = () => {}
 
-function pastelFor(name) {
+const SKIN_TONES = ['#ffe8cf', '#f3d3ac', '#e3b58a', '#c98f63', '#9c6b45']
+
+function hashString(value) {
   let hash = 0
-  for (const char of name) hash = (hash * 31 + char.codePointAt(0)) >>> 0
-  return PALETTE[hash % PALETTE.length]
+  for (const char of value) hash = (hash * 31 + char.codePointAt(0)) >>> 0
+  return hash
+}
+
+function mulberry32(seed) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+// Appearance is deterministic from name + the profile's appearance seed (kept
+// server-side and saved into team files), so a villager looks the same in
+// every client and across sessions until the dice are rolled.
+function appearanceFor(name, seed) {
+  const random = mulberry32(hashString(`${name.toLowerCase()}:${seed ?? 0}`))
+  const color = PALETTE[Math.floor(random() * PALETTE.length)]
+  const hairColor = random() < 0.4 ? PALETTE[Math.floor(random() * PALETTE.length)] : color
+  return {
+    color,
+    hairColor,
+    skin: SKIN_TONES[Math.floor(random() * SKIN_TONES.length)],
+    bodyScale: 0.88 + random() * 0.28,
+    headScale: 0.9 + random() * 0.22,
+  }
 }
 
 function roundedRect(ctx, x, y, width, height, radius) {
@@ -344,35 +371,39 @@ function addClouds() {
   }
 }
 
-function createVillager(name, role) {
-  const color = pastelFor(name)
+function createVillager(name, role, seed) {
+  const appearance = appearanceFor(name, seed)
+  const color = appearance.color
   const group = new THREE.Group()
 
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 0.5, 6, 16), toon(color))
   body.position.y = 0.72
+  body.scale.y = appearance.bodyScale
   body.castShadow = true
   group.add(body)
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.52, 20, 16), toon('#ffe8cf'))
+  // Face parts are children of the head so proportions scale together.
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.52, 20, 16), toon(appearance.skin))
   head.position.y = 1.62
+  head.scale.setScalar(appearance.headScale)
   head.castShadow = true
   group.add(head)
 
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.54, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), toon(color))
-  hair.position.y = 1.66
-  group.add(hair)
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.54, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), toon(appearance.hairColor))
+  hair.position.y = 0.04
+  head.add(hair)
 
   const eyeMaterial = new THREE.MeshBasicMaterial({ color: '#3c2c1e' })
   for (const side of [-0.18, 0.18]) {
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), eyeMaterial)
-    eye.position.set(side, 1.64, 0.46)
-    group.add(eye)
+    eye.position.set(side, 0.02, 0.46)
+    head.add(eye)
   }
   const blushMaterial = new THREE.MeshBasicMaterial({ color: '#ffb3a3' })
   for (const side of [-0.32, 0.32]) {
     const blush = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), blushMaterial)
-    blush.position.set(side, 1.52, 0.4)
-    group.add(blush)
+    blush.position.set(side, -0.1, 0.4)
+    head.add(blush)
   }
 
   const tag = makeCanvasSprite(512, 128, 2.6)
@@ -407,6 +438,7 @@ function createVillager(name, role) {
     name,
     role,
     color,
+    appearanceSeed: seed ?? 0,
     group,
     tag,
     bubble,
@@ -431,8 +463,28 @@ export function syncVillagers(coworkers, statuses) {
     }
   }
   for (const coworker of coworkers) {
-    if (!villagers.has(coworker.name)) villagers.set(coworker.name, createVillager(coworker.name, coworker.role))
-    const villager = villagers.get(coworker.name)
+    const seed = coworker.appearance ?? 0
+    let villager = villagers.get(coworker.name)
+    // A rerolled seed rebuilds the villager in place, keeping its spot.
+    if (villager && villager.appearanceSeed !== seed) {
+      const snapshot = {
+        position: villager.group.position.clone(),
+        rotationY: villager.group.rotation.y,
+        target: villager.target.clone(),
+        thinking: villager.thinking,
+      }
+      scene.remove(villager.group)
+      villager = createVillager(coworker.name, coworker.role, seed)
+      villager.group.position.copy(snapshot.position)
+      villager.group.rotation.y = snapshot.rotationY
+      villager.target.copy(snapshot.target)
+      villager.thinking = snapshot.thinking
+      villagers.set(coworker.name, villager)
+    }
+    if (!villager) {
+      villager = createVillager(coworker.name, coworker.role, seed)
+      villagers.set(coworker.name, villager)
+    }
     const status = statuses.find(entry => entry.name.toLowerCase() === coworker.name.toLowerCase())
     const statusText = status ? `${status.status}${status.note ? ` — ${status.note}` : ''}` : ''
     if (statusText !== villager.status) {
@@ -442,8 +494,8 @@ export function syncVillagers(coworkers, statuses) {
   }
 }
 
-export function villagerColor(name) {
-  return pastelFor(name)
+export function villagerColor(name, seed) {
+  return appearanceFor(name, seed).color
 }
 
 export function agentBubble(name, text) {

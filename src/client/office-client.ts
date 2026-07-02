@@ -67,6 +67,10 @@ export class OfficeClient {
     return this.request('DELETE', `/api/coworkers/${encodeURIComponent(name)}`)
   }
 
+  rerollAppearance(name: string): Promise<{ profile: CoworkerProfile }> {
+    return this.request('POST', `/api/coworkers/${encodeURIComponent(name)}/appearance`)
+  }
+
   saveTeam(path: string): Promise<{ path: string; coworkers: CoworkerProfile[] }> {
     return this.request('POST', '/api/team/save', { path })
   }

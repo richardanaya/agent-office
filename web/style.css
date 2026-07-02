@@ -239,15 +239,16 @@ textarea {
   white-space: nowrap;
 }
 
-#team-list .fire {
+#team-list .row-action {
   border: none;
   background: none;
   cursor: pointer;
   font-size: 15px;
   opacity: 0.6;
+  padding: 2px;
 }
 
-#team-list .fire:hover { opacity: 1; }
+#team-list .row-action:hover { opacity: 1; }
 
 #hire-form {
   display: flex;

@@ -16,6 +16,19 @@ describe('team files', () => {
     expect(loadTeamFile(path)).toEqual(team)
   })
 
+  it('round-trips appearance seeds', () => {
+    const path = tempPath('team.json')
+    const team = { coworkers: [{ name: 'Dana', role: 'data analyst', appearance: 123 }] }
+    saveTeamFile(path, team)
+    expect(loadTeamFile(path).coworkers[0]!.appearance).toBe(123)
+  })
+
+  it('rejects invalid appearance seeds', () => {
+    const path = tempPath('bad-appearance.json')
+    writeFileSync(path, JSON.stringify({ coworkers: [{ name: 'Dana', role: 'data analyst', appearance: -3 }] }))
+    expect(() => loadTeamFile(path)).toThrow(/invalid/)
+  })
+
   it('writes human-editable pretty JSON', () => {
     const path = tempPath('team.json')
     saveTeamFile(path, { coworkers: [{ name: 'Dana', role: 'data analyst' }] })

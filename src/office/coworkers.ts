@@ -1,6 +1,8 @@
 export type CoworkerProfile = {
   name: string
   role: string
+  // Visual seed for client renderings (e.g. the web villager); rerollable.
+  appearance?: number
 }
 
 // The office starts empty; coworkers are hired at runtime (interactively or
@@ -25,12 +27,25 @@ export function addAgentCoworker(profile: CoworkerProfile): CoworkerProfile {
   if (role.length < 3 || role.length > 200) {
     throw new Error('Coworker role must be 3-200 characters.')
   }
+  if (profile.appearance !== undefined && (!Number.isInteger(profile.appearance) || profile.appearance < 0)) {
+    throw new Error('Coworker appearance must be a non-negative integer.')
+  }
   if (agentCoworkerProfiles.some(coworker => coworker.name.toLowerCase() === name.toLowerCase())) {
     throw new Error(`Coworker ${name} already exists.`)
   }
-  const coworker = { name, role }
+  const coworker: CoworkerProfile = { name, role, ...(profile.appearance !== undefined ? { appearance: profile.appearance } : {}) }
   agentCoworkerProfiles.push(coworker)
-  return coworker
+  return { ...coworker }
+}
+
+export function setCoworkerAppearance(name: string, appearance: number): CoworkerProfile {
+  if (!Number.isInteger(appearance) || appearance < 0) {
+    throw new Error('Coworker appearance must be a non-negative integer.')
+  }
+  const profile = agentCoworkerProfiles.find(coworker => coworker.name.toLowerCase() === name.trim().toLowerCase())
+  if (!profile) throw new Error(`No coworker named ${name}.`)
+  profile.appearance = appearance
+  return { ...profile }
 }
 
 export function removeAgentCoworker(name: string): CoworkerProfile | undefined {

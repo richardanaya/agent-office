@@ -8,6 +8,7 @@ export const teamFileSchema = z.object({
       z.object({
         name: z.string().trim().min(2).max(32),
         role: z.string().trim().min(3).max(200),
+        appearance: z.number().int().nonnegative().optional().describe('Visual seed for client renderings.'),
       }),
     )
     .max(24),
