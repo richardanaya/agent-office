@@ -41,6 +41,39 @@ From a local checkout:
 npm run dev
 ```
 
+## Server and clients
+
+The office runs as a small HTTP server; every interface — the terminal UI today, a web UI tomorrow — is a client of the same API. `agent-office` starts an embedded server (default port 4747, override with `AGENT_OFFICE_PORT`) and attaches the terminal UI to it, so you can point other clients at the same live session.
+
+```bash
+agent-office serve                        # headless office server
+agent-office serve my-team.json --port 5000 --host 0.0.0.0
+agent-office connect http://127.0.0.1:4747   # attach a terminal UI to a running server
+```
+
+The API is plain REST + Server-Sent Events, CORS-enabled for browsers:
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /api/state` | Roster, statuses, kanban tasks, pending questions |
+| `GET /api/events` | SSE stream: agent activity, inbox messages, roster changes (`?since=<id>` replays missed events) |
+| `POST /api/messages` | Send a message as Human (`{ "to": "All", "body": "..." }`) |
+| `POST /api/coworkers` | Hire (`{ "name": "...", "role": "..." }`) |
+| `DELETE /api/coworkers/:name` | Fire |
+| `POST /api/questions/:id/answer` | Answer a coworker's question |
+| `POST /api/team/save` / `POST /api/team/load` | Save or load a team file (server-side path) |
+
+For programmatic use, the package exports `startOfficeServer` and a typed `OfficeClient`:
+
+```ts
+import { startOfficeServer, OfficeClient } from 'agent-office'
+
+const server = await startOfficeServer({ port: 4747, teamFile: 'team.json' })
+const client = new OfficeClient(server.url)
+await client.sendMessage('All', 'standup time')
+client.subscribeEvents(({ event }) => console.log(event.type))
+```
+
 ## Build a team
 
 The office starts empty. Press **Tab** to open the Team panel, then:

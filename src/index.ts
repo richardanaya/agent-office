@@ -10,6 +10,20 @@ export {
 } from './agents/coworkers.js'
 export { fireCoworker, hireCoworker, type HiredCoworker } from './office/hiring.js'
 export { loadTeamFile, saveTeamFile, teamFileSchema, type TeamFile } from './office/team.js'
+export { startOfficeServer, type OfficeServer, type OfficeServerOptions } from './server/office-server.js'
+export { OfficeEventBus } from './server/event-bus.js'
+export { OfficeClient, type EventStreamStatus, type SubscribeOptions } from './client/office-client.js'
+export type {
+  AnswerQuestionRequest,
+  ApiError,
+  HireRequest,
+  OfficeEvent,
+  OfficeState,
+  SendMessageRequest,
+  StoredOfficeEvent,
+  TeamPathRequest,
+} from './protocol.js'
+export { DEFAULT_OFFICE_PORT, resolveOfficePort } from './config.js'
 export { describeModelConfiguration, resolveCoworkerModel } from './agents/model.js'
 export { mastra } from './mastra/index.js'
 export { OfficeMailbox, officeMailbox, type OfficeMessage } from './office/mailbox.js'

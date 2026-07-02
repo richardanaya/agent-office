@@ -2,17 +2,14 @@
 import { existsSync } from 'node:fs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text, render, useApp, useInput, useStdout } from 'ink'
-import type { Agent } from '@mastra/core/agent'
-import { getCoworkerAgent } from './agents/coworkers.js'
 import { describeModelConfiguration } from './agents/model.js'
-import { listAgentCoworkers } from './office/coworkers.js'
-import { fireCoworker, hireCoworker } from './office/hiring.js'
-import { loadTeamFile, saveTeamFile, type TeamFile } from './office/team.js'
-import { deliverHumanMessage, listHumanInbox, markAllHumanMessagesSeen } from './office/human.js'
-import { officeMailbox } from './office/mailbox.js'
-import { coworkerThread } from './office/threads.js'
-import { listCoworkerStatuses, listOfficeTasks, type CoworkerStatus, type OfficeTask } from './office/kanban.js'
-import { answerHumanQuestion, listHumanQuestions, type HumanQuestion } from './office/human-questions.js'
+import { resolveOfficePort } from './config.js'
+import { loadTeamFile } from './office/team.js'
+import type { CoworkerStatus, OfficeTask } from './office/kanban.js'
+import type { HumanQuestion } from './office/human-questions.js'
+import type { OfficeState } from './protocol.js'
+import { OfficeClient } from './client/office-client.js'
+import { startOfficeServer, type OfficeServer } from './server/office-server.js'
 import { expandLogLines, logContentWidth, type LogLine } from './cli/log-text.js'
 import { formatOfficeEvent, handleReasoningChunk, type Chunk } from './cli/office-events.js'
 import { parseMessageTarget } from './cli/message-target.js'
@@ -22,20 +19,17 @@ type Mode = 'chat' | 'team' | 'questions' | 'add-name' | 'add-role' | 'save-team
 
 const DEFAULT_TEAM_FILE = 'team.json'
 const MESSAGE_HISTORY_LIMIT = 50
+const STATE_POLL_INTERVAL_MS = 1_000
 
 let nextLogId = 1
 
-function App({ initialTeamFile, initialLogs }: { initialTeamFile: string; initialLogs: { text: string; color?: string }[] }) {
+type InitialLog = { text: string; color?: string }
+
+function App({ client, initialState, initialLogs }: { client: OfficeClient; initialState: OfficeState; initialLogs: InitialLog[] }) {
   const { exit } = useApp()
   const { stdout } = useStdout()
-  const [mode, setMode] = useState<Mode>(() => (listAgentCoworkers().length === 0 ? 'team' : 'chat'))
-  const [agents, setAgents] = useState<Record<string, Agent>>(() =>
-    Object.fromEntries(listAgentCoworkers().flatMap(profile => {
-      const agent = getCoworkerAgent(profile.name)
-      return agent ? [[profile.name, agent] as const] : []
-    })),
-  )
-  const [names, setNames] = useState<string[]>(() => ['All', ...listAgentCoworkers().map(profile => profile.name)])
+  const [mode, setMode] = useState<Mode>(() => (initialState.coworkers.length === 0 ? 'team' : 'chat'))
+  const [names, setNames] = useState<string[]>(() => ['All', ...initialState.coworkers.map(profile => profile.name)])
   const [pinnedIndex, setPinnedIndex] = useState(0)
   const [teamIndex, setTeamIndex] = useState(0)
   const [message, setMessage] = useState('')
@@ -43,18 +37,17 @@ function App({ initialTeamFile, initialLogs }: { initialTeamFile: string; initia
   const [historyIndex, setHistoryIndex] = useState<number | null>(null)
   const [draftName, setDraftName] = useState('')
   const [draftRole, setDraftRole] = useState('')
-  const [teamFile, setTeamFile] = useState(initialTeamFile)
+  const [teamFile, setTeamFile] = useState(initialState.teamFile ?? DEFAULT_TEAM_FILE)
   const [draftFile, setDraftFile] = useState('')
   const [logScrollOffset, setLogScrollOffset] = useState(0)
-  const [statuses, setStatuses] = useState<CoworkerStatus[]>([])
-  const [tasks, setTasks] = useState<OfficeTask[]>([])
-  const [questions, setQuestions] = useState<HumanQuestion[]>([])
+  const [statuses, setStatuses] = useState<CoworkerStatus[]>(initialState.statuses)
+  const [tasks, setTasks] = useState<OfficeTask[]>(initialState.tasks)
+  const [questions, setQuestions] = useState<HumanQuestion[]>(initialState.questions)
   const [questionIndex, setQuestionIndex] = useState(0)
   const [highlightIndex, setHighlightIndex] = useState(0)
   const [selectedChoices, setSelectedChoices] = useState<string[]>([])
   const [customAnswer, setCustomAnswer] = useState('')
-  const watching = useRef(new Set<string>())
-  const threadSubscriptions = useRef(new Map<string, { unsubscribe: () => void }>())
+  const connected = useRef(true)
   const deliveryQueue = useRef(Promise.resolve())
   const [logs, setLogs] = useState<LogLine[]>(() => [
     { id: nextLogId++, text: 'Welcome to your agent office. Tab switches Chat/Team.', color: 'green' },
@@ -89,41 +82,58 @@ function App({ initialTeamFile, initialLogs }: { initialTeamFile: string; initia
     setLogs(current => [...current.slice(-1000), { id: nextLogId++, text, color }])
   }, [])
 
-  const watchAgent = useCallback(async (agentName: string, agent: Agent) => {
-    const lowerName = agentName.toLowerCase()
-    if (watching.current.has(lowerName)) return
-    watching.current.add(lowerName)
+  const refreshState = useCallback(async () => {
     try {
-      const subscription = await agent.subscribeToThread(coworkerThread(agentName))
-      threadSubscriptions.current.set(lowerName, subscription)
-      for await (const chunk of subscription.stream) {
-        const typed = chunk as Chunk
-        try {
-          if (handleReasoningChunk(agentName, typed, addLog)) continue
-          const line = formatOfficeEvent(agentName, typed)
-          if (line) addLog(line.text, line.color)
-        } catch (error) {
-          addLog(`⚠️ Could not render an event from ${agentName}: ${error instanceof Error ? error.message : String(error)}`, 'red')
-        }
-      }
-    } catch (error) {
-      addLog(`❌ Stopped watching ${agentName}: ${error instanceof Error ? error.message : String(error)}`, 'red')
-    } finally {
-      threadSubscriptions.current.delete(lowerName)
-      watching.current.delete(lowerName)
+      const state = await client.getState()
+      setStatuses(state.statuses)
+      setTasks(state.tasks)
+      setQuestions(state.questions)
+      setNames(['All', ...state.coworkers.map(profile => profile.name)])
+      if (state.teamFile) setTeamFile(state.teamFile)
+    } catch {
+      // Connection loss is reported by the event stream status callback.
     }
-  }, [addLog])
-
-  function unwatchAgent(agentName: string) {
-    const lowerName = agentName.toLowerCase()
-    threadSubscriptions.current.get(lowerName)?.unsubscribe()
-    threadSubscriptions.current.delete(lowerName)
-    watching.current.delete(lowerName)
-  }
+  }, [client])
 
   useEffect(() => {
-    for (const name of Object.keys(agents)) void watchAgent(name, agents[name]!)
-  }, [agents, watchAgent])
+    const poll = setInterval(() => void refreshState(), STATE_POLL_INTERVAL_MS)
+    return () => clearInterval(poll)
+  }, [refreshState])
+
+  useEffect(() => {
+    const stop = client.subscribeEvents(({ event }) => {
+      switch (event.type) {
+        case 'agent-event': {
+          const chunk = event.chunk as Chunk
+          if (handleReasoningChunk(event.agent, chunk, addLog)) return
+          const line = formatOfficeEvent(event.agent, chunk)
+          if (line) addLog(line.text, line.color)
+          return
+        }
+        case 'human-message':
+          addLog(`📬 ${event.message.from} → you: ${event.message.body}`, 'green')
+          return
+        case 'human-message-sent':
+          addLog(`🧑 You → ${event.to}: ${event.body}`, 'cyan')
+          return
+        case 'roster-changed':
+          void refreshState()
+          return
+      }
+    }, {
+      onStatus: status => {
+        if (status === 'disconnected' && connected.current) {
+          connected.current = false
+          addLog('⚠️ Lost connection to the office server — retrying…', 'red')
+        } else if (status === 'connected' && !connected.current) {
+          connected.current = true
+          addLog('✅ Reconnected to the office server.', 'green')
+          void refreshState()
+        }
+      },
+    })
+    return stop
+  }, [client, addLog, refreshState])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset the answer state whenever the active question changes
   useEffect(() => {
@@ -132,95 +142,46 @@ function App({ initialTeamFile, initialLogs }: { initialTeamFile: string; initia
     setHighlightIndex(0)
   }, [questionIndex])
 
-  useEffect(() => {
-    const officePoll = setInterval(() => {
-      setStatuses(listCoworkerStatuses())
-      setTasks(listOfficeTasks())
-      setQuestions(listHumanQuestions({ unansweredOnly: true }))
-      const unread = listHumanInbox({ unreadOnly: true })
-      if (unread.length === 0) return
-      for (const inboxMessage of unread) addLog(`📬 ${inboxMessage.from} → you: ${inboxMessage.body}`, 'green')
-      markAllHumanMessagesSeen()
-    }, 1_000)
-    return () => clearInterval(officePoll)
-  }, [addLog])
-
-  function refreshRoster() {
-    setNames(['All', ...listAgentCoworkers().map(profile => profile.name)])
-    setPinnedIndex(0)
-    setTeamIndex(0)
-  }
-
   function hire(name: string, role: string) {
-    try {
-      const existing = listAgentCoworkers().map(profile => profile.name)
-      const hired = hireCoworker({ name, role })
-      for (const coworker of existing) {
-        officeMailbox.send({
-          from: 'office-admin',
-          to: coworker,
-          body: `Coworker directory updated: ${hired.profile.name} joined as ${hired.profile.role}. Use list_coworkers for the current full list.`,
-        })
-      }
-      setAgents(current => ({ ...current, [hired.profile.name]: hired.agent }))
-      refreshRoster()
-      addLog(`➕ Hired ${hired.profile.name}: ${hired.profile.role}`, 'green')
-    } catch (error) {
-      addLog(`❌ Could not hire coworker: ${error instanceof Error ? error.message : String(error)}`, 'red')
-    }
+    client.hire(name, role)
+      .then(({ profile }) => {
+        addLog(`➕ Hired ${profile.name}: ${profile.role}`, 'green')
+        void refreshState()
+      })
+      .catch(error => addLog(`❌ Could not hire coworker: ${error instanceof Error ? error.message : String(error)}`, 'red'))
   }
 
   function fire(name: string) {
-    const removed = fireCoworker(name)
-    if (!removed) return
-    unwatchAgent(removed.name)
-    setAgents(current => {
-      const { [removed.name]: _removed, ...rest } = current
-      return rest
-    })
-    refreshRoster()
-    addLog(`🗑️ Fired ${removed.name} for this run`, 'red')
-  }
-
-  function applyTeam(team: TeamFile, sourcePath: string) {
-    for (const existing of listAgentCoworkers()) {
-      unwatchAgent(existing.name)
-      fireCoworker(existing.name)
-    }
-    const nextAgents: Record<string, Agent> = {}
-    const failures: string[] = []
-    for (const member of team.coworkers) {
-      try {
-        const hired = hireCoworker(member)
-        nextAgents[hired.profile.name] = hired.agent
-      } catch (error) {
-        failures.push(`${member.name} (${error instanceof Error ? error.message : String(error)})`)
-      }
-    }
-    setAgents(nextAgents)
-    refreshRoster()
-    addLog(`📂 Loaded team${team.name ? ` "${team.name}"` : ''} from ${sourcePath} — ${listAgentCoworkers().length} coworker(s)`, 'green')
-    for (const failure of failures) addLog(`⚠️ Skipped ${failure}`, 'yellow')
+    client.fire(name)
+      .then(({ profile }) => {
+        addLog(`🗑️ Fired ${profile.name} for this run`, 'red')
+        setTeamIndex(0)
+        setPinnedIndex(0)
+        void refreshState()
+      })
+      .catch(error => addLog(`❌ Could not fire ${name}: ${error instanceof Error ? error.message : String(error)}`, 'red'))
   }
 
   function saveTeam(path: string) {
-    try {
-      saveTeamFile(path, { coworkers: listAgentCoworkers() })
-      setTeamFile(path)
-      addLog(`💾 Saved team (${listAgentCoworkers().length} coworker(s)) to ${path}`, 'green')
-    } catch (error) {
-      addLog(`❌ Could not save team: ${error instanceof Error ? error.message : String(error)}`, 'red')
-    }
+    client.saveTeam(path)
+      .then(result => {
+        setTeamFile(result.path)
+        addLog(`💾 Saved team (${result.coworkers.length} coworker(s)) to ${result.path} on the server`, 'green')
+      })
+      .catch(error => addLog(`❌ Could not save team: ${error instanceof Error ? error.message : String(error)}`, 'red'))
   }
 
   function loadTeam(path: string) {
-    try {
-      const team = loadTeamFile(path)
-      applyTeam(team, path)
-      setTeamFile(path)
-    } catch (error) {
-      addLog(`❌ Could not load team: ${error instanceof Error ? error.message : String(error)}`, 'red')
-    }
+    client.loadTeam(path)
+      .then(result => {
+        setTeamFile(result.path)
+        addLog(`📂 Loaded team${result.name ? ` "${result.name}"` : ''} from ${result.path} — ${result.coworkers.length} coworker(s)`, 'green')
+        for (const skipped of result.skipped) addLog(`⚠️ Skipped ${skipped}`, 'yellow')
+        setTeamIndex(0)
+        setPinnedIndex(0)
+        void refreshState()
+      })
+      .catch(error => addLog(`❌ Could not load team: ${error instanceof Error ? error.message : String(error)}`, 'red'))
   }
 
   function sendChatMessage() {
@@ -233,9 +194,11 @@ function App({ initialTeamFile, initialLogs }: { initialTeamFile: string; initia
     setHistory(current => [...current.slice(-(MESSAGE_HISTORY_LIMIT - 1)), message])
     setHistoryIndex(null)
     setMessage('')
+    // The server broadcasts a human-message-sent event to all clients, so
+    // success shows up through the event stream rather than a local log.
     deliveryQueue.current = deliveryQueue.current
-      .then(() => deliverHumanMessage(to, body))
-      .then(sent => addLog(`🧑 You → ${to}: ${sent.body}`, 'cyan'))
+      .then(() => client.sendMessage(to, body))
+      .then(() => undefined)
       .catch(error => addLog(`❌ Could not deliver to ${to}: ${error instanceof Error ? error.message : String(error)}`, 'red'))
   }
 
@@ -251,17 +214,16 @@ function App({ initialTeamFile, initialLogs }: { initialTeamFile: string; initia
         return
       }
     }
-    try {
-      answerHumanQuestion({ id: question.id, selectedChoices: finalChoices, customAnswer: trimmedCustom || undefined })
-      addLog(`✅ You answered ${question.from}'s question`, 'green')
-      setSelectedChoices([])
-      setCustomAnswer('')
-      setHighlightIndex(0)
-      setQuestions(listHumanQuestions({ unansweredOnly: true }))
-      if (questions.length <= 1) setMode('chat')
-    } catch (error) {
-      addLog(`❌ Could not answer question: ${error instanceof Error ? error.message : String(error)}`, 'red')
-    }
+    client.answerQuestion(question.id, { selectedChoices: finalChoices, customAnswer: trimmedCustom || undefined })
+      .then(() => {
+        addLog(`✅ You answered ${question.from}'s question`, 'green')
+        setSelectedChoices([])
+        setCustomAnswer('')
+        setHighlightIndex(0)
+        if (questions.length <= 1) setMode('chat')
+        void refreshState()
+      })
+      .catch(error => addLog(`❌ Could not answer question: ${error instanceof Error ? error.message : String(error)}`, 'red'))
   }
 
   useInput((input, key) => {
@@ -425,7 +387,7 @@ function App({ initialTeamFile, initialLogs }: { initialTeamFile: string; initia
   const panelTitle =
     mode === 'chat' ? 'Office chat'
     : mode === 'team' ? 'Team'
-    : mode === 'questions' ? `Questions from coworkers`
+    : mode === 'questions' ? 'Questions from coworkers'
     : mode === 'save-team' ? 'Save team'
     : mode === 'load-team' ? 'Load team'
     : 'Hire coworker'
@@ -451,15 +413,74 @@ function App({ initialTeamFile, initialLogs }: { initialTeamFile: string; initia
       <Box borderStyle="round" borderColor={borderColor} paddingX={1} flexDirection="column" height={inputPanelHeight}>
         <Text bold>{panelTitle}</Text>
         {mode === 'chat' && <ChatPanel names={names} pinnedIndex={pinnedIndex} target={target} message={message} statuses={statuses} tasks={tasks} questionCount={questions.length} />}
-        {mode === 'team' && <TeamPanel coworkerNames={coworkerNames} teamIndex={teamIndex} statuses={statuses} tasks={tasks} teamFile={teamFile} />}
+        {mode === 'team' && <TeamPanel coworkerNames={coworkerNames} teamIndex={Math.min(teamIndex, Math.max(0, coworkerNames.length - 1))} statuses={statuses} tasks={tasks} teamFile={teamFile} />}
         {mode === 'questions' && <QuestionPanel questions={questions} questionIndex={questionIndex} highlightIndex={highlightIndex} selectedChoices={selectedChoices} customAnswer={customAnswer} />}
         {mode === 'add-name' && <><Text>Coworker name: {draftName}<Text color="gray">█</Text></Text><Text color="gray">Enter continue · Esc cancel</Text></>}
         {mode === 'add-role' && <><Text>Role for {draftName}: {draftRole}<Text color="gray">█</Text></Text><Text color="gray">Enter hire · Esc cancel</Text></>}
-        {mode === 'save-team' && <><Text>Save team to: {draftFile}<Text color="gray">█</Text></Text><Text color="gray">Enter save · Esc cancel</Text></>}
-        {mode === 'load-team' && <><Text>Load team from: {draftFile}<Text color="gray">█</Text></Text><Text color="gray">Enter load (replaces current team) · Esc cancel</Text></>}
+        {mode === 'save-team' && <><Text>Save team to (server path): {draftFile}<Text color="gray">█</Text></Text><Text color="gray">Enter save · Esc cancel</Text></>}
+        {mode === 'load-team' && <><Text>Load team from (server path): {draftFile}<Text color="gray">█</Text></Text><Text color="gray">Enter load (replaces current team) · Esc cancel</Text></>}
       </Box>
     </Box>
   )
+}
+
+type LaunchPlan =
+  | { kind: 'standalone'; teamFile?: string }
+  | { kind: 'serve'; teamFile?: string; port: number; host: string }
+  | { kind: 'connect'; url: string }
+
+function printUsage(code: number): never {
+  const out = code === 0 ? console.log : console.error
+  out(`Usage:
+  agent-office [team.json]              run the office with a terminal UI
+  agent-office serve [team.json]        run a headless office server
+    --port <port>                       port to listen on (default ${resolveOfficePortSafe()})
+    --host <host>                       host to bind (default 127.0.0.1)
+  agent-office connect <url>            attach a terminal UI to a running server
+
+If ./team.json exists it loads automatically. AGENT_OFFICE_PORT overrides the default port.`)
+  process.exit(code)
+}
+
+function resolveOfficePortSafe() {
+  try {
+    return resolveOfficePort()
+  } catch {
+    return 4747
+  }
+}
+
+function parseCliArgs(argv: string[]): LaunchPlan {
+  const [first, ...rest] = argv
+  if (first === '--help' || first === '-h') printUsage(0)
+  if (first === 'connect') {
+    if (!rest[0]) printUsage(1)
+    return { kind: 'connect', url: rest[0] }
+  }
+  if (first && /^https?:\/\//.test(first)) return { kind: 'connect', url: first }
+  if (first === 'serve') {
+    let port = resolveOfficePort()
+    let host = '127.0.0.1'
+    let teamFile: string | undefined
+    for (let index = 0; index < rest.length; index++) {
+      const arg = rest[index]!
+      if (arg === '--port') {
+        port = Number.parseInt(rest[++index] ?? '', 10)
+        if (!Number.isInteger(port) || port < 0 || port > 65535) printUsage(1)
+      } else if (arg === '--host') {
+        const value = rest[++index]
+        if (!value) printUsage(1)
+        host = value
+      } else if (!arg.startsWith('-') && teamFile === undefined) {
+        teamFile = arg
+      } else {
+        printUsage(1)
+      }
+    }
+    return { kind: 'serve', port, host, teamFile }
+  }
+  if (first?.startsWith('-')) printUsage(1)
+  return { kind: 'standalone', teamFile: first }
 }
 
 function ensureModelProviderConfigured() {
@@ -479,39 +500,81 @@ Optional override:
   process.exit(1)
 }
 
-function bootstrapTeam(): { teamFile: string; logs: { text: string; color?: string }[] } {
-  const arg = process.argv[2]
-  const path = arg ?? (existsSync(DEFAULT_TEAM_FILE) ? DEFAULT_TEAM_FILE : undefined)
-  if (!path) return { teamFile: DEFAULT_TEAM_FILE, logs: [] }
-
+// Validate the team file up front so server startup errors are port errors
+// only; an explicitly requested file fails loudly, an auto-detected one warns.
+function resolveTeamFile(explicit: string | undefined): { teamFile?: string; warnings: InitialLog[] } {
+  const candidate = explicit ?? (existsSync(DEFAULT_TEAM_FILE) ? DEFAULT_TEAM_FILE : undefined)
+  if (!candidate) return { warnings: [] }
   try {
-    const team = loadTeamFile(path)
-    const failures: string[] = []
-    for (const member of team.coworkers) {
-      try {
-        hireCoworker(member)
-      } catch (error) {
-        failures.push(`${member.name} (${error instanceof Error ? error.message : String(error)})`)
-      }
-    }
-    return {
-      teamFile: path,
-      logs: [
-        { text: `📂 Loaded team${team.name ? ` "${team.name}"` : ''} from ${path} — ${listAgentCoworkers().length} coworker(s)`, color: 'green' },
-        ...failures.map(failure => ({ text: `⚠️ Skipped ${failure}`, color: 'yellow' })),
-      ],
-    }
+    loadTeamFile(candidate)
+    return { teamFile: candidate, warnings: [] }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
-    if (arg) {
-      // The user explicitly asked for this file; failing loudly beats a silent empty office.
+    if (explicit) {
       console.error(reason)
       process.exit(1)
     }
-    return { teamFile: DEFAULT_TEAM_FILE, logs: [{ text: `⚠️ ${reason}`, color: 'yellow' }] }
+    return { warnings: [{ text: `⚠️ ${reason}`, color: 'yellow' }] }
   }
 }
 
-ensureModelProviderConfigured()
-const bootstrap = bootstrapTeam()
-render(<App initialTeamFile={bootstrap.teamFile} initialLogs={bootstrap.logs} />)
+async function main() {
+  const plan = parseCliArgs(process.argv.slice(2))
+
+  if (plan.kind === 'connect') {
+    const client = new OfficeClient(plan.url)
+    let initialState: OfficeState
+    try {
+      initialState = await client.getState()
+    } catch (error) {
+      console.error(`Could not reach an office server at ${plan.url}: ${error instanceof Error ? error.message : String(error)}`)
+      process.exit(1)
+    }
+    render(<App client={client} initialState={initialState} initialLogs={[{ text: `🔌 Connected to office server at ${client.baseUrl}`, color: 'gray' }]} />)
+    return
+  }
+
+  ensureModelProviderConfigured()
+  const { teamFile, warnings } = resolveTeamFile(plan.teamFile)
+
+  if (plan.kind === 'serve') {
+    let server: OfficeServer
+    try {
+      server = await startOfficeServer({ port: plan.port, host: plan.host, teamFile })
+    } catch (error) {
+      console.error(`Could not start office server: ${error instanceof Error ? error.message : String(error)}`)
+      process.exit(1)
+    }
+    for (const warning of warnings) console.warn(warning.text)
+    for (const warning of server.bootstrapWarnings) console.warn(`⚠️ ${warning}`)
+    console.log(`agent-office server listening on ${server.url}${teamFile ? ` (team: ${teamFile})` : ''}`)
+    console.log(`Attach a terminal with: agent-office connect ${server.url}`)
+    return
+  }
+
+  let server: OfficeServer
+  const preferredPort = resolveOfficePort()
+  try {
+    server = await startOfficeServer({ port: preferredPort, host: '127.0.0.1', teamFile })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+      server = await startOfficeServer({ port: 0, host: '127.0.0.1', teamFile })
+      warnings.push({ text: `⚠️ Port ${preferredPort} is busy — office server is on port ${server.port} instead.`, color: 'yellow' })
+    } else {
+      console.error(`Could not start office server: ${error instanceof Error ? error.message : String(error)}`)
+      process.exit(1)
+    }
+  }
+
+  const client = new OfficeClient(server.url)
+  const initialState = await client.getState()
+  const initialLogs: InitialLog[] = [
+    { text: `🌐 Office server at ${server.url} — attach another client with: agent-office connect ${server.url}`, color: 'gray' },
+    ...warnings,
+    ...server.bootstrapWarnings.map(text => ({ text: `⚠️ ${text}`, color: 'yellow' })),
+    ...(teamFile ? [{ text: `📂 Loaded team from ${teamFile} — ${initialState.coworkers.length} coworker(s)`, color: 'green' }] : []),
+  ]
+  render(<App client={client} initialState={initialState} initialLogs={initialLogs} />)
+}
+
+void main()
