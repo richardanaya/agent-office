@@ -1,7 +1,7 @@
-// The office: an art deco penthouse floor under a night sky — polished
-// marble, gold trim, potted palms, and a skyline of lit deco towers — with
-// Animal Crossing-style toon villagers (one per coworker) that wander, bob,
-// think, and talk in speech bubbles.
+// The office: an art deco underwater habitat — a glass half-dome with gold
+// ribs over a polished marble floor, drowned deco towers and neon signs in
+// the water outside, bubbles rising past — with Animal Crossing-style toon
+// villagers (one per coworker) that wander, bob, think, and talk in bubbles.
 
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -579,6 +579,40 @@ function addLampPost(x, z) {
   scene.add(lamp)
 }
 
+// Neon signage that cuts through the water (fog-exempt so it glows at
+// distance); materials collected for the flicker animation.
+const neonMaterials = []
+const NEON_SIGNS = [
+  ['AGENT OFFICE', '#4ef0e0'],
+  ['OPEN 24H', '#ffc44e'],
+  ['BIG IDEAS', '#ff5ec4'],
+  ['MAIL ROOM', '#4ef0e0'],
+  ['WIKI & CO.', '#ff6a5e'],
+  ['THINK!', '#7ea8ff'],
+]
+
+function makeNeonTexture(text, color) {
+  const canvas = document.createElement('canvas')
+  canvas.width = 512
+  canvas.height = 128
+  const ctx = canvas.getContext('2d')
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = '400 64px "Poiret One", "Josefin Sans", sans-serif'
+  ctx.shadowColor = color
+  ctx.fillStyle = color
+  for (const blur of [30, 18, 8]) {
+    ctx.shadowBlur = blur
+    ctx.fillText(text, 256, 66)
+  }
+  ctx.shadowBlur = 0
+  ctx.fillStyle = '#f6ffff'
+  ctx.fillText(text, 256, 66)
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
+}
+
 // A ring of dark deco towers with lit windows on the horizon.
 function makeWindowTexture() {
   const canvas = document.createElement('canvas')
@@ -600,11 +634,12 @@ function makeWindowTexture() {
 
 function addSkyline() {
   const count = 22
+  let signIndex = 0
   for (let index = 0; index < count; index++) {
     const angle = (index / count) * Math.PI * 2 + 0.13
     const distance = 46 + (index % 4) * 5
     const width = 3.5 + (index % 3) * 1.6
-    const height = 8 + ((index * 7) % 13)
+    const height = 10 + ((index * 7) % 15)
     const tower = new THREE.Group()
     const body = new THREE.Mesh(
       new THREE.BoxGeometry(width, height, width * 0.8),
@@ -613,35 +648,88 @@ function addSkyline() {
     body.position.y = height / 2
     tower.add(body)
     if (index % 2 === 0) {
-      const crown = new THREE.Mesh(new THREE.BoxGeometry(width * 0.55, 1.6, width * 0.45), new THREE.MeshBasicMaterial({ color: '#1a1a2c' }))
+      const crown = new THREE.Mesh(new THREE.BoxGeometry(width * 0.55, 1.6, width * 0.45), new THREE.MeshBasicMaterial({ color: '#122029' }))
       crown.position.y = height + 0.8
       tower.add(crown)
       const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.2, 6), new THREE.MeshBasicMaterial({ color: '#d4af37' }))
       spire.position.y = height + 2.6
       tower.add(spire)
     }
-    tower.position.set(Math.cos(angle) * distance, 0, Math.sin(angle) * distance)
-    tower.lookAt(0, 0, 0)
+    // Every few towers wears a neon sign facing the dome.
+    if (index % 4 === 1) {
+      const [text, color] = NEON_SIGNS[signIndex % NEON_SIGNS.length]
+      signIndex++
+      const material = new THREE.MeshBasicMaterial({ map: makeNeonTexture(text, color), transparent: true, fog: false, depthWrite: false })
+      material.userData.phase = signIndex * 2.3
+      neonMaterials.push(material)
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(width * 1.15, width * 0.29), material)
+      sign.position.set(0, height * 0.62, width * 0.4 + 0.2)
+      tower.add(sign)
+    }
+    // Towers rise from the seabed below the habitat floor.
+    tower.position.set(Math.cos(angle) * distance, -1.6, Math.sin(angle) * distance)
+    tower.lookAt(0, -1.6, 0)
     scene.add(tower)
   }
 }
 
-function addStars() {
-  const positions = []
-  for (let index = 0; index < 350; index++) {
+// Bubbles drift up through the water outside the dome.
+let bubbleGeometry = null
+let bubbleSpeeds = null
+
+function addBubbles() {
+  const count = 260
+  const positions = new Float32Array(count * 3)
+  bubbleSpeeds = new Float32Array(count)
+  for (let index = 0; index < count; index++) {
     const theta = Math.random() * Math.PI * 2
-    const phi = Math.random() * Math.PI * 0.42
-    const radius = 110
-    positions.push(
-      radius * Math.sin(phi) * Math.cos(theta),
-      radius * Math.cos(phi) + 4,
-      radius * Math.sin(phi) * Math.sin(theta),
-    )
+    const distance = 31 + Math.random() * 38
+    positions[index * 3] = Math.cos(theta) * distance
+    positions[index * 3 + 1] = Math.random() * 34 - 1.5
+    positions[index * 3 + 2] = Math.sin(theta) * distance
+    bubbleSpeeds[index] = 0.7 + Math.random() * 1.4
   }
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  const stars = new THREE.Points(geometry, new THREE.PointsMaterial({ color: '#f2e6c4', size: 0.7, sizeAttenuation: true, fog: false }))
-  scene.add(stars)
+  bubbleGeometry = new THREE.BufferGeometry()
+  bubbleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  const bubbles = new THREE.Points(
+    bubbleGeometry,
+    new THREE.PointsMaterial({ color: '#cfeef8', size: 0.4, sizeAttenuation: true, transparent: true, opacity: 0.55 }),
+  )
+  scene.add(bubbles)
+}
+
+// The habitat itself: a barely-there glass hemisphere with gold deco ribs.
+function addGlassDome() {
+  const radius = FLOOR_RADIUS + 2
+  const glass = new THREE.Mesh(
+    new THREE.SphereGeometry(radius, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshPhongMaterial({ color: '#9fdcec', transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false, shininess: 80 }),
+  )
+  scene.add(glass)
+
+  const gold = toon('#c9a227')
+  for (let index = 0; index < 6; index++) {
+    const rib = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.14, 8, 64, Math.PI), gold)
+    rib.rotation.y = (index / 6) * Math.PI
+    scene.add(rib)
+  }
+  for (const latitude of [0.38, 0.72]) {
+    const y = radius * latitude
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(Math.sqrt(radius * radius - y * y), 0.12, 8, 72), gold)
+    ring.rotation.x = Math.PI / 2
+    ring.position.y = y
+    scene.add(ring)
+  }
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.22, 10, 96), gold)
+  collar.rotation.x = Math.PI / 2
+  collar.position.y = 0.05
+  scene.add(collar)
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 10), new THREE.MeshBasicMaterial({ color: '#ffe9a8' }))
+  beacon.position.y = radius + 0.3
+  scene.add(beacon)
+  const beaconBase = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.42, 0.5, 10), gold)
+  beaconBase.position.y = radius - 0.1
+  scene.add(beaconBase)
 }
 
 function addMuzzle(head, appearance) {
@@ -1005,6 +1093,23 @@ function animate() {
     }
   }
 
+  if (bubbleGeometry) {
+    const positions = bubbleGeometry.attributes.position
+    for (let index = 0; index < bubbleSpeeds.length; index++) {
+      let y = positions.getY(index) + bubbleSpeeds[index] * delta
+      if (y > 34) y = -1.5
+      positions.setY(index, y)
+    }
+    positions.needsUpdate = true
+  }
+
+  for (const material of neonMaterials) {
+    const phase = material.userData.phase
+    material.opacity = 0.78 + 0.22 * Math.sin(now * 1.4 + phase)
+    // Occasional hard neon sputter.
+    if (Math.sin(now * 11 + phase * 3) > 0.985) material.opacity *= 0.35
+  }
+
   controls.update()
   renderer.render(scene, camera)
 }
@@ -1014,8 +1119,8 @@ export function initScene({ container, onVillagerClick, onBoardClick, onWikiClic
   boardClickHandler = onBoardClick ?? (() => {})
   wikiClickHandler = onWikiClick ?? (() => {})
   scene = new THREE.Scene()
-  scene.background = new THREE.Color('#10131f')
-  scene.fog = new THREE.Fog('#10131f', 38, 95)
+  scene.background = new THREE.Color('#0b2836')
+  scene.fog = new THREE.Fog('#0b2836', 30, 92)
   lastFrameAt = performance.now() / 1000
 
   camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200)
@@ -1035,8 +1140,8 @@ export function initScene({ container, onVillagerClick, onBoardClick, onWikiClic
   controls.maxDistance = 40
   controls.maxPolarAngle = Math.PI * 0.46
 
-  // Warm gold key light against a cool night ambience.
-  scene.add(new THREE.HemisphereLight('#8d96c4', '#22222c', 0.85))
+  // Warm interior lamp light against the cool water outside.
+  scene.add(new THREE.HemisphereLight('#7fb6c9', '#10222c', 0.9))
   const sun = new THREE.DirectionalLight('#ffd9a0', 1.5)
   sun.position.set(14, 22, 10)
   sun.castShadow = true
@@ -1047,11 +1152,11 @@ export function initScene({ container, onVillagerClick, onBoardClick, onWikiClic
   sun.shadow.camera.bottom = -28
   scene.add(sun)
 
-  // The street level far below, and the office floor as a raised dais.
-  const street = new THREE.Mesh(new THREE.CircleGeometry(160, 48), new THREE.MeshBasicMaterial({ color: '#0b0d16' }))
-  street.rotation.x = -Math.PI / 2
-  street.position.y = -1.4
-  scene.add(street)
+  // The seabed far below, and the office floor as a raised dais.
+  const seabed = new THREE.Mesh(new THREE.CircleGeometry(160, 48), new THREE.MeshBasicMaterial({ color: '#0a1d26' }))
+  seabed.rotation.x = -Math.PI / 2
+  seabed.position.y = -1.6
+  scene.add(seabed)
 
   const daisWall = new THREE.Mesh(
     new THREE.CylinderGeometry(FLOOR_RADIUS + 0.2, FLOOR_RADIUS + 1.4, 1.4, 64, 1, true),
@@ -1080,7 +1185,8 @@ export function initScene({ container, onVillagerClick, onBoardClick, onWikiClic
     addPlanter(Math.cos(angle) * distance, Math.sin(angle) * distance)
   }
   addSkyline()
-  addStars()
+  addBubbles()
+  addGlassDome()
   const plaza = new THREE.Mesh(new THREE.CircleGeometry(4.6, 48), new THREE.MeshToonMaterial({ map: makePlazaTexture() }))
   plaza.rotation.x = -Math.PI / 2
   plaza.position.y = 0.01
