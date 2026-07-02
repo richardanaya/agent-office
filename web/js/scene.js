@@ -113,28 +113,47 @@ function makeCanvasSprite(width, height, worldWidth) {
   return { canvas, ctx: canvas.getContext('2d'), texture, sprite }
 }
 
+// Shrink the font until the text fits (down to a floor), then ellipsize.
+// Sets ctx.font as a side effect so the caller can fillText directly.
+function fitText(ctx, text, maxWidth, weight, baseSize, minSize) {
+  for (let size = baseSize; size >= minSize; size -= 2) {
+    ctx.font = `${weight} ${size}px "M PLUS Rounded 1c", sans-serif`
+    if (ctx.measureText(text).width <= maxWidth) return text
+  }
+  let trimmed = text
+  while (trimmed && ctx.measureText(`${trimmed}…`).width > maxWidth) trimmed = trimmed.slice(0, -1)
+  return `${trimmed.trimEnd()}…`
+}
+
+// The tag canvas is fixed-size; the card inside is drawn at content height
+// from the top, so a wrapped status extends the card without any rescaling.
 function drawNameTag(tag, name, color, status) {
   const { ctx, canvas, texture } = tag
+  const maxTextWidth = canvas.width - 72
   ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+  ctx.font = '500 30px "M PLUS Rounded 1c", sans-serif'
+  const statusLines = status ? wrapBubbleLines(ctx, status, maxTextWidth, 2) : []
+  const cardHeight = 88 + statusLines.length * 34
+
   ctx.fillStyle = 'rgba(255, 248, 230, 0.92)'
   ctx.strokeStyle = color
   ctx.lineWidth = 10
-  roundedRect(ctx, 8, 8, canvas.width - 16, canvas.height - 16, 46)
+  roundedRect(ctx, 8, 8, canvas.width - 16, cardHeight - 16, 40)
   ctx.fill()
   ctx.stroke()
+
   ctx.fillStyle = '#6b4f2f'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  if (status) {
-    ctx.font = '800 46px "M PLUS Rounded 1c", sans-serif'
-    ctx.fillText(name, canvas.width / 2, 48)
-    ctx.font = '500 32px "M PLUS Rounded 1c", sans-serif'
-    ctx.fillStyle = '#9b7f5d'
-    ctx.fillText(status, canvas.width / 2, 92)
-  } else {
-    ctx.font = '800 52px "M PLUS Rounded 1c", sans-serif'
-    ctx.fillText(name, canvas.width / 2, canvas.height / 2)
-  }
+  const fittedName = fitText(ctx, name, maxTextWidth, '800', statusLines.length > 0 ? 46 : 52, 30)
+  ctx.fillText(fittedName, canvas.width / 2, 48)
+
+  ctx.fillStyle = '#9b7f5d'
+  ctx.font = '500 30px "M PLUS Rounded 1c", sans-serif'
+  statusLines.forEach((line, index) => {
+    ctx.fillText(line, canvas.width / 2, 92 + index * 34)
+  })
   texture.needsUpdate = true
 }
 
@@ -593,8 +612,10 @@ function createVillager(name, role, seed) {
     head.add(blush)
   }
 
-  const tag = makeCanvasSprite(512, 128, 2.6)
-  tag.sprite.position.y = 2.6
+  const tag = makeCanvasSprite(512, 176, 2.6)
+  // Anchor the tag by its top edge so a two-line status grows downward.
+  tag.sprite.center.set(0.5, 1)
+  tag.sprite.position.y = 3.05
   drawNameTag(tag, name, color, '')
   group.add(tag.sprite)
 
