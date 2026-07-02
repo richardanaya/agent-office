@@ -148,13 +148,18 @@ function drawBubble(bubble, text) {
   roundedRect(ctx, left, top, bubbleWidth, bodyHeight, 30)
   ctx.fill()
   ctx.stroke()
-  // Tail.
+  // Tail below the body: fill a wedge over the border to open the gap, then
+  // outline only its two sides so it reads as one shape with the tip down.
   ctx.beginPath()
-  ctx.moveTo(centerX - 24, bodyBottom - 8)
+  ctx.moveTo(centerX - 24, bodyBottom - 12)
   ctx.lineTo(centerX, canvas.height - 6)
-  ctx.lineTo(centerX + 24, bodyBottom - 8)
+  ctx.lineTo(centerX + 24, bodyBottom - 12)
   ctx.closePath()
   ctx.fill()
+  ctx.beginPath()
+  ctx.moveTo(centerX - 24, bodyBottom - 5)
+  ctx.lineTo(centerX, canvas.height - 6)
+  ctx.lineTo(centerX + 24, bodyBottom - 5)
   ctx.stroke()
 
   ctx.fillStyle = '#6b4f2f'
@@ -378,7 +383,7 @@ function createVillager(name, role) {
   const bubble = makeCanvasSprite(BUBBLE_CANVAS_WIDTH, BUBBLE_CANVAS_HEIGHT, BUBBLE_CANVAS_WIDTH / BUBBLE_PIXELS_PER_UNIT)
   // Anchor at the tail tip so taller bubbles grow upward, not over the tag.
   bubble.sprite.center.set(0.5, 0)
-  bubble.sprite.position.y = 3.0
+  bubble.sprite.position.y = 3.15
   bubble.sprite.visible = false
   group.add(bubble.sprite)
 
@@ -408,6 +413,8 @@ function createVillager(name, role) {
     think,
     bubbleHideAt: 0,
     thinking: false,
+    thinkingSince: 0,
+    thinkShownAt: 0,
     status: '',
     phase: Math.random() * Math.PI * 2,
     target: group.position.clone(),
@@ -448,12 +455,14 @@ export function agentBubble(name, text) {
 }
 
 // Thinking is its own small thought-cloud sprite, so it can never overwrite
-// or resize a speech bubble that is still being read.
+// or resize a speech bubble that is still being read. Agents reason in many
+// short bursts, so visibility is smoothed in the animation loop: the cloud
+// appears only after ~0.3s of continuous thinking and stays at least ~1.2s.
 export function setThinking(name, thinking) {
   const villager = villagers.get(name)
   if (!villager) return
+  if (thinking && !villager.thinking) villager.thinkingSince = performance.now() / 1000
   villager.thinking = thinking
-  villager.think.visible = thinking
 }
 
 function animate() {
@@ -485,6 +494,12 @@ function animate() {
     }
     if (villager.bubble.sprite.visible && now > villager.bubbleHideAt) {
       villager.bubble.sprite.visible = false
+    }
+    if (villager.thinking && !villager.think.visible && now - villager.thinkingSince > 0.3) {
+      villager.think.visible = true
+      villager.thinkShownAt = now
+    } else if (!villager.thinking && villager.think.visible && now - villager.thinkShownAt > 1.2) {
+      villager.think.visible = false
     }
   }
 
