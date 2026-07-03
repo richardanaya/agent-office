@@ -6,7 +6,6 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
-const PALETTE = ['#ff9f9f', '#ffc38a', '#f7e07e', '#9fe08f', '#8fd8e8', '#9fb8ff', '#c9aaff', '#ffaad5']
 const FLOOR_RADIUS = 26
 const WANDER_RADIUS = 8
 
@@ -45,13 +44,17 @@ let villagerClickHandler = () => {}
 let boardClickHandler = () => {}
 let wikiClickHandler = () => {}
 
-// Animal Crossing-style villager traits, all derived from the seed. Humans
-// are one species among the animals; for them the fur color is hair color.
-const SPECIES = ['cat', 'dog', 'bear', 'rabbit', 'frog', 'bird', 'pig', 'mouse', 'human']
-const FUR_COLORS = ['#f6d7b0', '#e8b48a', '#c98f63', '#9c6b45', '#9a9a9a', '#f5f0e6', '#ffd9e8', '#b6e3ff', '#cbb2ff', '#b9e6a1', '#ffe08a', '#f79d84']
-const SKIN_TONES = ['#ffe3c9', '#f3d3ac', '#e3b58a', '#c98f63', '#9c6b45']
+// Noble little deco humans, all derived from the seed: skin, hair, nose,
+// ears, headwear, evening attire, and a finishing accessory.
+const SKIN_TONES = ['#ffe3c9', '#f8d9b4', '#f3d3ac', '#e3b58a', '#c98f63', '#a97c52', '#8a5c3d']
+const HAIR_COLORS = ['#1d1a17', '#3c2a1e', '#5b3c26', '#7a5230', '#b3843c', '#8f4c2e', '#b7b3ac', '#e6ddc8']
+const HAIR_STYLES = ['sleek', 'waves', 'bob', 'bun', 'pompadour', 'crop']
+const NOSE_SHAPES = ['button', 'pointed', 'long', 'wide']
+const EAR_SHAPES = ['petite', 'round', 'tall']
+const HEADWEAR = ['none', 'none', 'tophat', 'cloche', 'boater', 'headband']
+const OUTFIT_COLORS = ['#22222c', '#2c3e63', '#1f5e4e', '#6e2f3d', '#5d4a78', '#b8912c', '#f0e6d2', '#3c6e71']
 const ACCESSORIES = ['none', 'scarf', 'bowtie', 'pendant', 'buttons', 'badge']
-const ACCESSORY_COLORS = ['#e86a5e', '#f5c542', '#5aa73a', '#4a90d9', '#b06ab3', '#e08a3c']
+const ACCESSORY_COLORS = ['#d4af37', '#f2ede2', '#2f8f6b', '#b03a48', '#3b5fa0', '#c9ccd4']
 
 function lighten(hex, amount) {
   const value = Number.parseInt(hex.slice(1), 16)
@@ -83,13 +86,14 @@ function mulberry32(seed) {
 function appearanceFor(name, seed) {
   const random = mulberry32(hashString(`${name.toLowerCase()}:${seed ?? 0}`))
   const pick = list => list[Math.floor(random() * list.length)]
-  const fur = pick(FUR_COLORS)
   return {
-    species: pick(SPECIES),
-    fur,
-    muzzle: lighten(fur, 0.45),
     skin: pick(SKIN_TONES),
-    shirt: pick(PALETTE),
+    hair: pick(HAIR_COLORS),
+    hairStyle: pick(HAIR_STYLES),
+    nose: pick(NOSE_SHAPES),
+    ears: pick(EAR_SHAPES),
+    headwear: pick(HEADWEAR),
+    outfit: pick(OUTFIT_COLORS),
     accessory: pick(ACCESSORIES),
     accessoryColor: pick(ACCESSORY_COLORS),
     bodyScale: 0.88 + random() * 0.28,
@@ -732,114 +736,147 @@ function addGlassDome() {
   scene.add(beaconBase)
 }
 
-function addMuzzle(head, appearance) {
-  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), toon(appearance.muzzle))
-  muzzle.scale.set(1, 0.72, 0.65)
-  muzzle.position.set(0, -0.16, 0.42)
-  head.add(muzzle)
-  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), toon('#6b4f2f'))
-  nose.position.set(0, -0.08, 0.56)
-  head.add(nose)
+// Deco hairdos: a base cap plus style-specific volumes.
+function addHair(head, appearance) {
+  const material = toon(appearance.hair)
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), material)
+  cap.position.y = 0.06
+  head.add(cap)
+  switch (appearance.hairStyle) {
+    case 'waves':
+      // Finger waves along the hairline.
+      for (const x of [-0.32, -0.16, 0, 0.16, 0.32]) {
+        const wave = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), material)
+        wave.position.set(x, 0.16, Math.sqrt(Math.max(0.05, 0.3 - x * x)) + 0.12)
+        head.add(wave)
+      }
+      break
+    case 'bob':
+      for (const side of [-1, 1]) {
+        const curtain = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), material)
+        curtain.scale.set(0.5, 1.1, 0.75)
+        curtain.position.set(side * 0.42, -0.05, 0.02)
+        head.add(curtain)
+      }
+      break
+    case 'bun': {
+      const bun = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), material)
+      bun.position.set(0, 0.36, -0.42)
+      head.add(bun)
+      break
+    }
+    case 'pompadour': {
+      const pomp = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 12), material)
+      pomp.scale.set(1, 0.75, 1)
+      pomp.position.set(0, 0.5, 0.16)
+      head.add(pomp)
+      break
+    }
+    case 'crop':
+      cap.scale.set(1, 0.72, 1)
+      break
+    default:
+    // 'sleek' is the plain cap.
+  }
 }
 
-// Ears, beaks, and snouts that make each species readable at a glance.
-function addSpeciesFeatures(head, appearance) {
-  const fur = toon(appearance.fur)
-  switch (appearance.species) {
-    case 'cat':
-      for (const side of [-1, 1]) {
-        const ear = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.32, 8), fur)
-        ear.position.set(side * 0.27, 0.48, 0)
-        ear.rotation.z = side * -0.25
-        head.add(ear)
-      }
-      addMuzzle(head, appearance)
-      break
-    case 'dog':
-      for (const side of [-1, 1]) {
-        const ear = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), fur)
-        ear.scale.set(0.55, 1.25, 0.45)
-        ear.position.set(side * 0.42, 0.18, 0)
-        ear.rotation.z = side * 0.85
-        head.add(ear)
-      }
-      addMuzzle(head, appearance)
-      break
-    case 'bear':
-      for (const side of [-1, 1]) {
-        const ear = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), fur)
-        ear.position.set(side * 0.3, 0.44, 0)
-        head.add(ear)
-      }
-      addMuzzle(head, appearance)
-      break
-    case 'rabbit':
-      for (const side of [-1, 1]) {
-        const ear = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), fur)
-        ear.scale.set(0.55, 1.9, 0.55)
-        ear.position.set(side * 0.2, 0.66, 0)
-        ear.rotation.z = side * -0.12
-        head.add(ear)
-      }
-      addMuzzle(head, appearance)
-      break
-    case 'frog': {
-      // Eye bumps on top of the head; the eyes themselves sit on these.
-      for (const side of [-1, 1]) {
-        const bump = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), fur)
-        bump.position.set(side * 0.24, 0.42, 0.14)
-        head.add(bump)
-      }
-      const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.022, 8, 16, Math.PI), toon('#6b4f2f'))
-      mouth.rotation.z = Math.PI
-      mouth.position.set(0, -0.1, 0.47)
-      head.add(mouth)
+function addNose(head, appearance) {
+  const material = toon(lighten(appearance.skin, 0.1))
+  switch (appearance.nose) {
+    case 'pointed': {
+      const nose = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.18, 8), material)
+      nose.rotation.x = Math.PI / 2
+      nose.position.set(0, -0.08, 0.54)
+      head.add(nose)
       break
     }
-    case 'human': {
-      const hair = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), toon(appearance.fur))
-      hair.position.y = 0.06
-      head.add(hair)
-      for (const side of [-1, 1]) {
-        const ear = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), toon(appearance.skin))
-        ear.position.set(side * 0.5, 0, 0)
-        head.add(ear)
-      }
+    case 'long': {
+      const nose = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), material)
+      nose.scale.set(0.7, 1, 1.6)
+      nose.position.set(0, -0.1, 0.5)
+      head.add(nose)
       break
     }
-    case 'bird': {
-      const beak = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.28, 10), toon('#f2a33c'))
-      beak.rotation.x = Math.PI / 2
-      beak.position.set(0, -0.04, 0.56)
-      head.add(beak)
-      const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.24, 8), fur)
-      tuft.position.set(0.04, 0.54, 0)
-      tuft.rotation.z = -0.35
-      head.add(tuft)
+    case 'wide': {
+      const nose = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), material)
+      nose.scale.set(1.5, 0.8, 0.9)
+      nose.position.set(0, -0.1, 0.48)
+      head.add(nose)
       break
     }
-    case 'pig': {
-      const snout = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.12, 12), toon(appearance.muzzle))
-      snout.rotation.x = Math.PI / 2
-      snout.position.set(0, -0.06, 0.5)
-      head.add(snout)
-      for (const side of [-1, 1]) {
-        const ear = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.22, 8), fur)
-        ear.position.set(side * 0.26, 0.44, 0)
-        ear.rotation.z = side * -0.5
-        head.add(ear)
-      }
+    default: {
+      const nose = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), material)
+      nose.position.set(0, -0.08, 0.5)
+      head.add(nose)
+    }
+  }
+}
+
+function addEars(head, appearance) {
+  const material = toon(appearance.skin)
+  for (const side of [-1, 1]) {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(appearance.ears === 'petite' ? 0.07 : 0.1, 8, 8), material)
+    if (appearance.ears === 'tall') ear.scale.y = 1.4
+    ear.position.set(side * 0.5, 0, 0)
+    head.add(ear)
+  }
+}
+
+// Deco millinery: top hats, cloches, boaters, feathered headbands.
+function addHeadwear(head, appearance) {
+  const accent = toon(appearance.accessoryColor)
+  const gold = toon('#d4af37')
+  switch (appearance.headwear) {
+    case 'tophat': {
+      const felt = toon('#20202a')
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.05, 16), felt)
+      brim.position.y = 0.5
+      head.add(brim)
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.32, 0.52, 16), felt)
+      crown.position.y = 0.78
+      head.add(crown)
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.325, 0.335, 0.1, 16), gold)
+      band.position.y = 0.58
+      head.add(band)
       break
     }
-    case 'mouse':
-      for (const side of [-1, 1]) {
-        const ear = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), fur)
-        ear.scale.set(1, 1, 0.35)
-        ear.position.set(side * 0.34, 0.4, 0)
-        head.add(ear)
-      }
-      addMuzzle(head, appearance)
+    case 'cloche': {
+      const bell = new THREE.Mesh(new THREE.SphereGeometry(0.58, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), accent)
+      bell.position.y = 0.04
+      head.add(bell)
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.035, 8, 24), gold)
+      band.rotation.x = Math.PI / 2
+      band.position.y = 0.1
+      head.add(band)
       break
+    }
+    case 'boater': {
+      const straw = toon('#e8dcbc')
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.04, 16), straw)
+      brim.position.y = 0.5
+      head.add(brim)
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.18, 16), straw)
+      crown.position.y = 0.6
+      head.add(crown)
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.325, 0.325, 0.08, 16), accent)
+      band.position.y = 0.57
+      head.add(band)
+      break
+    }
+    case 'headband': {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.045, 8, 24), accent)
+      band.rotation.x = Math.PI / 2
+      band.position.y = 0.2
+      head.add(band)
+      const feather = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.5, 6), toon('#f2ede2'))
+      feather.position.set(0.3, 0.55, 0)
+      feather.rotation.z = -0.4
+      head.add(feather)
+      const jewel = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), gold)
+      jewel.position.set(0.33, 0.26, 0.32)
+      head.add(jewel)
+      break
+    }
     default:
   }
 }
@@ -893,7 +930,7 @@ function addChestAccessory(group, appearance) {
 
 function createVillager(name, role, seed) {
   const appearance = appearanceFor(name, seed)
-  const color = appearance.fur
+  const color = appearance.outfit
   const group = new THREE.Group()
 
   // The whole character scales by height; sprites stay unscaled so tag and
@@ -902,36 +939,35 @@ function createVillager(name, role, seed) {
   figure.scale.setScalar(appearance.height)
   group.add(figure)
 
-  // The capsule body reads as the villager's outfit; the head is fur.
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 0.5, 6, 16), toon(appearance.shirt))
+  // The capsule body reads as the villager's evening attire.
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 0.5, 6, 16), toon(appearance.outfit))
   body.position.y = 0.72
   body.scale.y = appearance.bodyScale
   body.castShadow = true
   figure.add(body)
 
   // Face parts are children of the head so proportions scale together.
-  const headColor = appearance.species === 'human' ? appearance.skin : appearance.fur
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.52, 20, 16), toon(headColor))
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.52, 20, 16), toon(appearance.skin))
   head.position.y = 1.62
   head.scale.setScalar(appearance.headScale)
   head.castShadow = true
   figure.add(head)
 
-  addSpeciesFeatures(head, appearance)
+  addHair(head, appearance)
+  addNose(head, appearance)
+  addEars(head, appearance)
+  addHeadwear(head, appearance)
   addChestAccessory(figure, appearance)
 
-  // White eyes with dark pupils; frog eyes sit on top of its head bumps.
+  // White eyes with dark pupils.
   const eyeWhiteMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff' })
   const pupilMaterial = new THREE.MeshBasicMaterial({ color: '#1d140c' })
-  const eyeSpot = appearance.species === 'frog'
-    ? { x: 0.24, y: 0.5, z: 0.24, size: 0.085 }
-    : { x: 0.18, y: 0.05, z: 0.45, size: 0.075 }
   for (const side of [-1, 1]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(eyeSpot.size, 10, 10), eyeWhiteMaterial)
-    eye.position.set(side * eyeSpot.x, eyeSpot.y, eyeSpot.z)
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 10), eyeWhiteMaterial)
+    eye.position.set(side * 0.18, 0.05, 0.45)
     head.add(eye)
     const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), pupilMaterial)
-    pupil.position.set(side * eyeSpot.x, eyeSpot.y + (appearance.species === 'frog' ? 0.02 : 0), eyeSpot.z + 0.065)
+    pupil.position.set(side * 0.18, 0.05, 0.515)
     head.add(pupil)
   }
   const blushMaterial = new THREE.MeshBasicMaterial({ color: '#ffb3a3' })
@@ -1033,7 +1069,7 @@ export function syncVillagers(coworkers, statuses) {
 }
 
 export function villagerColor(name, seed) {
-  return appearanceFor(name, seed).fur
+  return appearanceFor(name, seed).outfit
 }
 
 export function agentBubble(name, text) {
