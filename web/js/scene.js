@@ -741,13 +741,16 @@ function addHair(head, appearance) {
   const material = toon(appearance.hair)
   const cap = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), material)
   cap.position.y = 0.06
+  // Tilt back so the front rim sits above the brows (a hairline) while the
+  // back drops to cover the nape — keeps hair out of the eyes on every style.
+  cap.rotation.x = -0.32
   head.add(cap)
   switch (appearance.hairStyle) {
     case 'waves':
-      // Finger waves along the hairline.
+      // Finger waves hugging the head along the hairline, above the brows.
       for (const x of [-0.32, -0.16, 0, 0.16, 0.32]) {
         const wave = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), material)
-        wave.position.set(x, 0.16, Math.sqrt(Math.max(0.05, 0.3 - x * x)) + 0.12)
+        wave.position.set(x, 0.26, Math.sqrt(Math.max(0.04, 0.24 - x * x)))
         head.add(wave)
       }
       break
@@ -841,12 +844,14 @@ function addHeadwear(head, appearance) {
       break
     }
     case 'cloche': {
-      const bell = new THREE.Mesh(new THREE.SphereGeometry(0.58, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), accent)
-      bell.position.y = 0.04
+      // Tilted back like the hair cap so the low bell clears the eyes.
+      const bell = new THREE.Mesh(new THREE.SphereGeometry(0.58, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.58), accent)
+      bell.position.y = 0.06
+      bell.rotation.x = -0.3
       head.add(bell)
       const band = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.035, 8, 24), gold)
-      band.rotation.x = Math.PI / 2
-      band.position.y = 0.1
+      band.rotation.x = Math.PI / 2 - 0.3
+      band.position.y = 0.08
       head.add(band)
       break
     }
