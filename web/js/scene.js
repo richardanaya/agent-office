@@ -46,8 +46,9 @@ let wikiClickHandler = () => {}
 
 // Noble little deco humans, all derived from the seed: skin, hair, nose,
 // ears, headwear, evening attire, and a finishing accessory.
-// Kept bright: the dim underwater toon lighting darkens everything a step.
-const SKIN_TONES = ['#ffeedd', '#ffe3c9', '#fbd9b6', '#f2c89e', '#e5b184', '#d29a6c', '#bd8455']
+// Kept very bright: the dim underwater toon lighting darkens everything a
+// step, so even the deepest tone here stays light.
+const SKIN_TONES = ['#fff5ea', '#ffeedd', '#ffe7cf', '#fde0c0', '#f8d6b0', '#f2cca2', '#eec096']
 const HAIR_COLORS = ['#1d1a17', '#3c2a1e', '#5b3c26', '#7a5230', '#b3843c', '#8f4c2e', '#b7b3ac', '#e6ddc8']
 const HAIR_STYLES = ['sleek', 'waves', 'bob', 'bun', 'pompadour', 'crop']
 const NOSE_SHAPES = ['button', 'pointed', 'long', 'wide']
